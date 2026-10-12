@@ -1,0 +1,8 @@
+{
+    "workspace_path": "C:\\Users\\Michael\\jarvis-workspace",
+    "models": {
+        "strategist": "qwen2.5:7b",
+        "analyst": "minicpm-v"
+    },
+    "search_engine": "https://html.duckduckgo.com/html/?q="
+}

@@ -1,0 +1,84 @@
+# Jarvi Master Roadmap: From Business Agent to AI Companion
+
+## Phase 1: The Autonomous Business Engine & Core Hardening (Current)
+**Goal:** Fully autonomous, zero-cost product research and listing generation. Establish a bulletproof, monitored foundation.
+**Architecture:** Linear Python Scripts transitioning to a Local Task Queue.
+
+1. **Core Hardening & Infrastructure:**
+   - Implement Virtual Environments (`venv`) and strict `.gitignore`.
+   - Implement Version Control (`git`) with a private GitHub repository.
+   - Implement Persistent Logging, Heartbeats, and Exponential Backoff (Retry logic).
+   - **Strict Dependency Pinning:** Lock all package versions in `requirements.txt`.
+   - **Automated Data Backup:** Set up a weekly local backup script for the workspace data folders.
+2. **Resource Management & Accounting:**
+   - Build the **Resource Watchdog**: A background script to monitor RAM/VRAM/CPU and kill runaway processes.
+   - Build the **Cost & Token Ledger**: A module to log token usage and estimated local inference costs to `dashboard/cost_log.csv`.
+3. **Sparse Activation Implementation:**
+   - Refactor the pipeline to use a "Router" dispatch system.
+   - Ensure Ollama's automatic model unloading is leveraged so only one specialist model is active in RAM at a time.
+   - Implement human-like randomized delays and exponential backoff in all web automation.
+4. **The 5-Agent Business Pipeline:**
+   - **Trend Spotter:** Dynamic search loops (no hardcoded limits) to find market gaps.
+   - **Analyst:** Deep-dive research, generating strict PRDs.
+   - **Scout:** API/Scraping integration to find exact products and prices.
+   - **Creator:** Drafting copy, SEO, and basic media assets.
+   - **Publisher:** Formatting and queuing for Human-in-the-Loop (HITL) approval.
+
+## Phase 2: The Personal Assistant & Secure Integration
+**Goal:** Jarvi interacts with your digital life (Email, Calendar, Notes) without compromising security.
+**Architecture:** Tool-Calling Agent with OAuth2 Security and strict data isolation.
+
+1. **Security & Privacy Audit (PREREQUISITE):**
+   - Implement the Security Audit Framework. Isolate personal data from business data.
+   - Establish encrypted local storage for OAuth2 tokens.
+   - Implement the Principle of Least Privilege for all personal API scopes.
+2. **Secure API Integration:**
+   - Implement OAuth2 flows for Google Workspace / Microsoft 365.
+   - Build "Tools" for the LLM: `read_calendar()`, `draft_email()`, `search_contacts()`.
+3. **Intent Routing (The Brain):**
+   - Build a "Router" model (small, fast text model) that reads incoming tasks and routes them: 
+     - "Find me a pan" -> Routes to Business Pipeline.
+     - "Email my mom" -> Routes to Personal Assistant.
+4. **Strict HITL Gates:**
+   - Drafting = Auto. Sending/Deleting = Requires mobile approval.
+
+## Phase 3: The Media Production Pipeline
+**Goal:** Automated video and audio content generation.
+**Architecture:** Multi-modal processing pipeline.
+
+1. **Audio Pipeline:**
+   - Integrate `edge-tts` for voiceovers.
+   - Integrate local Whisper model for transcribing reference videos.
+2. **Video Pipeline (The Gold Standard):**
+   - Do not use Python to render video. 
+   - AI generates an **Edit Decision List (EDL)** (JSON format specifying cut points).
+   - Use automated CapCut desktop scripts or FFmpeg strictly for executing the EDL.
+3. **Asset Management:**
+   - Automated upload to local NAS/Cloud storage with metadata tagging.
+
+## Phase 4: The Companion Interface (Mobile & Voice)
+**Goal:** Always-on, conversational AI accessible from anywhere.
+**Architecture:** Decoupled Backend (FastAPI) + Frontend (React Native).
+
+1. **Backend Decoupling:**
+   - Refactor all Python scripts into **FastAPI** endpoints.
+   - Implement WebSockets for real-time streaming of text and audio.
+2. **Long-Term Memory (Vector Database):**
+   - Implement **ChromaDB** or **Qdrant** with Hybrid Search (Dense + Sparse BM25).
+   - Jarvi will embed all your documents, past conversations, and business data into vectors so it can "remember" context across months.
+3. **Mobile App & Remote Access:**
+   - Build a lightweight React Native or Flutter app.
+   - Use **Tailscale** or **Cloudflare Tunnels** to securely expose your local PC's FastAPI server to your phone without opening router ports.
+4. **Voice Mode:**
+   - Implement local STT (Whisper) and TTS (Edge-TTS or Piper) for real-time voice conversations.
+
+## Phase 5: Self-Improvement & Agentic Coding
+**Goal:** Jarvi writes and maintains its own code.
+**Architecture:** Sandboxed execution environments.
+
+1. **Code Generation:**
+   - Jarvi uses `qwen2.5-coder` to write new Python scripts for new tasks.
+2. **Sandboxed Execution:**
+   - Jarvi runs its own code in isolated Docker containers to prevent it from breaking the host system.
+3. **Automated Testing:**
+   - Jarvi writes `pytest` unit tests for its own code before deploying it to the main system.
