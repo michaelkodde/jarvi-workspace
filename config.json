@@ -1,5 +1,6 @@
 {
     "workspace_path": "C:\\Users\\Michael\\jarvis-workspace",
+    "ollama_url": "http://localhost:11434",
     "models": {
         "strategist": "qwen2.5:7b",
         "analyst": "minicpm-v"
