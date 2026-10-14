@@ -2,12 +2,12 @@
 Token Ledger: Thread-safe logging of LLM token usage and estimated costs.
 """
 import csv
-import logging
 import json
+import logging
 import threading
-from pathlib import Path
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,6 @@ class TokenUsage:
         completion_tokens: Number of tokens in the model's response.
         total_tokens: Sum of prompt and completion tokens.
     """
-
     agent_name: str
     model_name: str
     prompt_tokens: int
@@ -85,10 +84,10 @@ class TokenLedger:
                 config = json.load(f)
                 return config.get("token_costs", {})
         except FileNotFoundError:
-            logger.warning(f"Config file not found: {self.config_path}. Defaulting to 0.0 costs.")
+            logger.warning("Config file not found: %s. Defaulting to 0.0 costs.", self.config_path)
             return {}
         except (json.JSONDecodeError, IOError) as e:
-            logger.warning(f"Failed to load token costs from config: {e}. Defaulting to 0.0")
+            logger.warning("Failed to load token costs from config: %s. Defaulting to 0.0", e)
             return {}
 
     def _calculate_cost(self, model_name: str, total_tokens: int) -> float:
@@ -135,9 +134,9 @@ class TokenLedger:
                         usage.total_tokens,
                         f"${estimated_cost:.6f}"
                     ])
-                logger.debug(f"Logged {usage.total_tokens} tokens for {usage.agent_name} to {self.log_file}")
+                logger.debug("Logged %d tokens for %s to %s", usage.total_tokens, usage.agent_name, self.log_file)
             except (IOError, PermissionError) as e:
-                logger.error(f"Failed to write to token ledger: {e}")
+                logger.error("Failed to write to token ledger: %s", e)
                 raise
 
     def shutdown(self) -> None:
