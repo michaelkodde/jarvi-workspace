@@ -1,0 +1,77 @@
+{
+  "version": "1.0",
+  "brand_name": "Jarvi",
+  "personality_traits": ["helpful", "knowledgeable", "trustworthy", "concise"],
+  "tones": {
+    "professional": {
+      "description": "Formal, authoritative, data-driven",
+      "vocabulary_level": "advanced",
+      "sentence_structure": "complex",
+      "forbidden_phrases": ["awesome", "amazing", "super", "cool"],
+      "preferred_phrases": ["optimal", "efficient", "evidence-based", "demonstrated"]
+    },
+    "casual": {
+      "description": "Friendly, conversational, approachable",
+      "vocabulary_level": "basic",
+      "sentence_structure": "simple",
+      "forbidden_phrases": ["furthermore", "consequently", "hence", "thus"],
+      "preferred_phrases": ["check out", "you'll love", "here's the deal", "let's dive in"]
+    },
+    "persuasive": {
+      "description": "Compelling, benefit-focused, action-oriented",
+      "vocabulary_level": "intermediate",
+      "sentence_structure": "varied",
+      "forbidden_phrases": ["maybe", "perhaps", "might", "could"],
+      "preferred_phrases": ["discover", "transform", "unlock", "experience"]
+    },
+    "technical": {
+      "description": "Precise, detailed, specification-focused",
+      "vocabulary_level": "expert",
+      "sentence_structure": "complex",
+      "forbidden_phrases": ["simple", "easy", "basic", "just"],
+      "preferred_phrases": ["specification", "parameter", "optimization", "benchmark"]
+    }
+  },
+  "templates": {
+    "problem_agitate_solve": {
+      "description": "Identify problem, agitate pain, present solution",
+      "structure": ["problem", "agitation", "solution", "cta"]
+    },
+    "five_reasons": {
+      "description": "Listicle format with 5 key points",
+      "structure": ["hook", "reason_1", "reason_2", "reason_3", "reason_4", "reason_5", "cta"]
+    },
+    "before_after_bridge": {
+      "description": "Show before state, after state, and how product bridges them",
+      "structure": ["before", "after", "bridge", "cta"]
+    },
+    "feature_advantage_benefit": {
+      "description": "Technical product, explain features then benefits",
+      "structure": ["feature_1", "advantage_1", "benefit_1", "feature_2", "advantage_2", "benefit_2", "cta"]
+    },
+    "storytelling": {
+      "description": "Narrative arc with product as hero's tool",
+      "structure": ["setup", "conflict", "resolution", "cta"]
+    }
+  },
+  "conversion_frameworks": {
+    "AIDA": "Attention → Interest → Desire → Action",
+    "PAS": "Problem → Agitate → Solution",
+    "FAB": "Features → Advantages → Benefits"
+  },
+  "platform_guidelines": {
+    "twitter": {"max_chars": 280, "hashtag_count": 3, "tone_preference": "casual"},
+    "linkedin": {"max_chars": 1300, "hashtag_count": 5, "tone_preference": "professional"},
+    "instagram": {"max_chars": 2200, "hashtag_count": 10, "tone_preference": "casual"},
+    "facebook": {"max_chars": 63206, "hashtag_count": 2, "tone_preference": "casual"},
+    "blog": {"min_words": 800, "max_words": 2000, "tone_preference": "professional"},
+    "youtube": {"max_words": 1000, "tone_preference": "casual"},
+    "email": {"min_words": 150, "max_words": 500, "tone_preference": "persuasive"}
+  },
+  "affiliate_disclosure_default": "As an affiliate, we may earn a commission from qualifying purchases. This does not affect the price you pay.",
+  "image_suggestion_defaults": {
+    "product_hero": "Professional product photo on clean background, well-lit",
+    "lifestyle": "Product in use by target demographic in natural setting",
+    "comparison": "Side-by-side comparison with competitor or alternative"
+  }
+}
