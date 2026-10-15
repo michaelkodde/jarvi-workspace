@@ -1,0 +1,13 @@
+{
+  "version": "1.0",
+  "last_updated": "2026-10-16",
+  "banned": [
+    {
+      "name": "GenericDropship",
+      "aliases": ["generic dropship", "unknown brand", "no name brand"],
+      "reason": "Failed ethical validation: unknown supply chain opacity",
+      "banned_date": "2026-10-16",
+      "severity": "high"
+    }
+  ]
+}

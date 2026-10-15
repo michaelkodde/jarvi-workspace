@@ -1,0 +1,5 @@
+timestamp,agent_name,model_name,prompt_tokens,completion_tokens,total_tokens,estimated_cost
+2026-10-15T16:49:44.669077,TrendSpotter,qwen2.5:7b,276,133,409,$0.000000
+2026-10-15T16:50:21.929318,Analyst,qwen2.5:7b,725,31,756,$0.000000
+2026-10-15T16:50:28.894345,Analyst,qwen2.5:7b,723,29,752,$0.000000
+2026-10-15T16:50:35.169498,Analyst,qwen2.5:7b,722,25,747,$0.000000
