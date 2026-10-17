@@ -1,0 +1,365 @@
+{
+  "fingerprint": "2261fd5c36e5889d82b864df3ec9c613c81346bd3127ccc89dab3afa83b9299e",
+  "registry": {
+    "agents": {
+      "Analyst": {
+        "agent_name_param": "Analyst",
+        "base_classes": [
+          "BaseAgent"
+        ],
+        "calls_super_with_playbook": true,
+        "class_type": "base_agent_subclass",
+        "constructor_params": [
+          {
+            "default_value": null,
+            "has_default": false,
+            "name": "llm_client"
+          },
+          {
+            "default_value": null,
+            "has_default": false,
+            "name": "token_ledger"
+          },
+          {
+            "default_value": null,
+            "has_default": false,
+            "name": "model_name"
+          },
+          {
+            "default_value": "src/agents/playbooks/analyst.md",
+            "has_default": true,
+            "name": "playbook_path"
+          }
+        ],
+        "has_custom_execute": false,
+        "has_route_method": false,
+        "module_path": "src/agents/analyst.py",
+        "name": "Analyst",
+        "playbook": {
+          "exists_on_disk": true,
+          "is_required": false,
+          "path": "src/agents/playbooks/analyst.md",
+          "source": "default"
+        },
+        "status": "ready",
+        "test_file": "tests/test_analyst.py"
+      },
+      "Creator": {
+        "agent_name_param": "Creator",
+        "base_classes": [
+          "BaseAgent"
+        ],
+        "calls_super_with_playbook": true,
+        "class_type": "base_agent_subclass",
+        "constructor_params": [
+          {
+            "default_value": null,
+            "has_default": false,
+            "name": "llm_client"
+          },
+          {
+            "default_value": null,
+            "has_default": false,
+            "name": "token_ledger"
+          },
+          {
+            "default_value": null,
+            "has_default": false,
+            "name": "model_name"
+          },
+          {
+            "default_value": "src/agents/playbooks/creator.md",
+            "has_default": true,
+            "name": "playbook_path"
+          },
+          {
+            "default_value": "brain/memories/brand_voice.json",
+            "has_default": true,
+            "name": "brand_voice_path"
+          }
+        ],
+        "has_custom_execute": true,
+        "has_route_method": false,
+        "module_path": "src/agents/creator.py",
+        "name": "Creator",
+        "playbook": {
+          "exists_on_disk": true,
+          "is_required": false,
+          "path": "src/agents/playbooks/creator.md",
+          "source": "default"
+        },
+        "status": "ready",
+        "test_file": "tests/test_creator.py"
+      },
+      "Publisher": {
+        "agent_name_param": "Publisher",
+        "base_classes": [
+          "BaseAgent"
+        ],
+        "calls_super_with_playbook": true,
+        "class_type": "base_agent_subclass",
+        "constructor_params": [
+          {
+            "default_value": null,
+            "has_default": false,
+            "name": "llm_client"
+          },
+          {
+            "default_value": null,
+            "has_default": false,
+            "name": "token_ledger"
+          },
+          {
+            "default_value": null,
+            "has_default": false,
+            "name": "model_name"
+          },
+          {
+            "default_value": "src/agents/playbooks/publisher.md",
+            "has_default": true,
+            "name": "playbook_path"
+          },
+          {
+            "default_value": "dashboard/publications.db",
+            "has_default": true,
+            "name": "publication_ledger_path"
+          }
+        ],
+        "has_custom_execute": true,
+        "has_route_method": false,
+        "module_path": "src/agents/publisher.py",
+        "name": "Publisher",
+        "playbook": {
+          "exists_on_disk": true,
+          "is_required": false,
+          "path": "src/agents/playbooks/publisher.md",
+          "source": "default"
+        },
+        "status": "ready",
+        "test_file": "tests/test_publisher.py"
+      },
+      "Router": {
+        "agent_name_param": null,
+        "base_classes": [],
+        "calls_super_with_playbook": false,
+        "class_type": "standalone",
+        "constructor_params": [
+          {
+            "default_value": null,
+            "has_default": false,
+            "name": "ollama_model"
+          },
+          {
+            "default_value": null,
+            "has_default": false,
+            "name": "playbook_path"
+          },
+          {
+            "default_value": "query_ollama",
+            "has_default": true,
+            "name": "llm_callable"
+          },
+          {
+            "default_value": "None",
+            "has_default": true,
+            "name": "token_ledger"
+          }
+        ],
+        "has_custom_execute": false,
+        "has_route_method": true,
+        "module_path": "src/agents/router.py",
+        "name": "Router",
+        "playbook": {
+          "exists_on_disk": true,
+          "is_required": true,
+          "path": "src/agents/playbooks/router.md",
+          "source": "conventional"
+        },
+        "status": "ready",
+        "test_file": "tests/test_router.py"
+      },
+      "Scout": {
+        "agent_name_param": "Scout",
+        "base_classes": [
+          "BaseAgent"
+        ],
+        "calls_super_with_playbook": true,
+        "class_type": "base_agent_subclass",
+        "constructor_params": [
+          {
+            "default_value": null,
+            "has_default": false,
+            "name": "llm_client"
+          },
+          {
+            "default_value": null,
+            "has_default": false,
+            "name": "token_ledger"
+          },
+          {
+            "default_value": null,
+            "has_default": false,
+            "name": "model_name"
+          },
+          {
+            "default_value": "src/agents/playbooks/scout.md",
+            "has_default": true,
+            "name": "playbook_path"
+          },
+          {
+            "default_value": "brain/memories/banned_brands.json",
+            "has_default": true,
+            "name": "banned_brands_path"
+          }
+        ],
+        "has_custom_execute": true,
+        "has_route_method": false,
+        "module_path": "src/agents/scout.py",
+        "name": "Scout",
+        "playbook": {
+          "exists_on_disk": true,
+          "is_required": false,
+          "path": "src/agents/playbooks/scout.md",
+          "source": "default"
+        },
+        "status": "ready",
+        "test_file": "tests/test_scout.py"
+      },
+      "TrendSpotter": {
+        "agent_name_param": "TrendSpotter",
+        "base_classes": [
+          "BaseAgent"
+        ],
+        "calls_super_with_playbook": true,
+        "class_type": "base_agent_subclass",
+        "constructor_params": [
+          {
+            "default_value": null,
+            "has_default": false,
+            "name": "llm_client"
+          },
+          {
+            "default_value": null,
+            "has_default": false,
+            "name": "token_ledger"
+          },
+          {
+            "default_value": null,
+            "has_default": false,
+            "name": "model_name"
+          },
+          {
+            "default_value": "src/agents/playbooks/trend_spotter.md",
+            "has_default": true,
+            "name": "playbook_path"
+          }
+        ],
+        "has_custom_execute": false,
+        "has_route_method": false,
+        "module_path": "src/agents/trend_spotter.py",
+        "name": "TrendSpotter",
+        "playbook": {
+          "exists_on_disk": true,
+          "is_required": false,
+          "path": "src/agents/playbooks/trend_spotter.md",
+          "source": "default"
+        },
+        "status": "ready",
+        "test_file": "tests/test_trend_spotter.py"
+      }
+    },
+    "missing_pipeline_agents": [],
+    "pipelines": [
+      {
+        "agent_refs": [
+          "Scout",
+          "Creator",
+          "Publisher"
+        ],
+        "name": "content_pipeline",
+        "steps": [
+          "scout",
+          "create",
+          "review",
+          "publish"
+        ]
+      }
+    ],
+    "scan_duration_ms": 125,
+    "scan_errors": [],
+    "scan_timestamp": "2026-10-17T16:28:30Z",
+    "utils": [
+      {
+        "exports": [
+          "human_delay",
+          "retry_with_backoff"
+        ],
+        "module_path": "src/utils/automation_guard.py",
+        "name": "automation_guard"
+      },
+      {
+        "exports": [
+          "BackupError",
+          "BackupResult",
+          "create_backup"
+        ],
+        "module_path": "src/utils/backup.py",
+        "name": "backup"
+      },
+      {
+        "exports": [
+          "query_ollama",
+          "shutdown",
+          "verify_model_available",
+          "OllamaAPIError",
+          "OllamaResponse"
+        ],
+        "module_path": "src/utils/llm_client.py",
+        "name": "llm_client"
+      },
+      {
+        "exports": [
+          "ProductData",
+          "ScrapingError",
+          "search_products"
+        ],
+        "module_path": "src/utils/product_scraper.py",
+        "name": "product_scraper"
+      },
+      {
+        "exports": [
+          "PublicationLedger",
+          "PublicationRecord",
+          "LedgerError"
+        ],
+        "module_path": "src/utils/publication_ledger.py",
+        "name": "publication_ledger"
+      },
+      {
+        "exports": [
+          "ScoutCheckpoint"
+        ],
+        "module_path": "src/utils/scout_checkpoint.py",
+        "name": "scout_checkpoint"
+      },
+      {
+        "exports": [
+          "TokenLedger",
+          "TokenUsage"
+        ],
+        "module_path": "src/utils/token_ledger.py",
+        "name": "token_ledger"
+      },
+      {
+        "exports": [
+          "ResourceWatchdog",
+          "WatchdogError",
+          "SystemMetrics"
+        ],
+        "module_path": "src/utils/watchdog.py",
+        "name": "watchdog"
+      }
+    ]
+  },
+  "version": 1
+}
