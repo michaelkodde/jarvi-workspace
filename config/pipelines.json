@@ -1,0 +1,27 @@
+{
+  "pipelines": {
+    "content_pipeline": {
+      "steps": [
+        {
+          "name": "scout",
+          "type": "agent",
+          "agent": "Scout"
+        },
+        {
+          "name": "create",
+          "type": "agent",
+          "agent": "Creator"
+        },
+        {
+          "name": "review",
+          "type": "hitl"
+        },
+        {
+          "name": "publish",
+          "type": "agent",
+          "agent": "Publisher"
+        }
+      ]
+    }
+  }
+}
