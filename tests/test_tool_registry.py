@@ -22,8 +22,6 @@ from src.companion.tool_registry import (
 
 
 class MockAgent(BaseAgent):
-    """Mock agent that bypasses BaseAgent.__init__ for isolation."""
-
     def __init__(
         self,
         name: str,
@@ -80,14 +78,8 @@ def registry(mock_router: Router, mock_discovery: DiscoveryEngine) -> ToolRegist
     return ToolRegistry(agents=agents, router=mock_router, discovery_engine=mock_discovery)
 
 
-# ---------------------------------------------------------------------------
-# Success paths
-# ---------------------------------------------------------------------------
-
-
 def test_call_agent_success(registry: ToolRegistry) -> None:
     result = registry.call_tool("scout", {"task_prompt": "Find products", "context": "Non-toxic"})
-
     assert isinstance(result, ToolResult)
     assert result.status == "success"
     assert result.error is None
@@ -99,7 +91,6 @@ def test_call_agent_success(registry: ToolRegistry) -> None:
 
 def test_call_router_success(registry: ToolRegistry) -> None:
     result = registry.call_tool("router", {"raw_prompt": "Find trending niches"})
-
     assert result.status == "success"
     assert result.output["target_agent"] == "scout"
     assert result.output["confidence"] == 0.95
@@ -108,7 +99,6 @@ def test_call_router_success(registry: ToolRegistry) -> None:
 
 def test_call_discovery_success(registry: ToolRegistry) -> None:
     result = registry.call_tool("discovery", {"force": True})
-
     assert result.status == "success"
     assert "agent_count" in result.output
     assert result.output["status"] in ("healthy", "degraded")
@@ -140,13 +130,17 @@ def test_get_tool_schema_non_string_returns_none(registry: ToolRegistry) -> None
 
 
 def test_case_insensitive_tool_lookup(registry: ToolRegistry) -> None:
+    # Uppercase should be normalized to lowercase and succeed
     result = registry.call_tool("SCOUT", {"task_prompt": "x"})
     assert result.status == "success"
 
+    # Mixed case should also work
+    result = registry.call_tool("Scout", {"task_prompt": "x"})
+    assert result.status == "success"
 
-# ---------------------------------------------------------------------------
-# Error paths
-# ---------------------------------------------------------------------------
+    # Router in uppercase
+    result = registry.call_tool("ROUTER", {"raw_prompt": "x"})
+    assert result.status == "success"
 
 
 def test_unknown_tool_returns_error(registry: ToolRegistry) -> None:
@@ -157,7 +151,9 @@ def test_unknown_tool_returns_error(registry: ToolRegistry) -> None:
 
 
 def test_invalid_tool_name_rejected(registry: ToolRegistry) -> None:
-    for bad_name in ("", "UPPER", "1starts_with_digit", "has-dash", "has space", "a" * 65):
+    # Invalid names: empty, starts with digit, contains dash/space, too long
+    # Note: "UPPER" is now VALID (case-insensitive) and gets normalized
+    for bad_name in ("", "1starts_with_digit", "has-dash", "has space", "a" * 65):
         result = registry.call_tool(bad_name, {})
         assert result.status == "error"
         assert result.error_code == ErrorCode.INVALID_TOOL_NAME
@@ -197,11 +193,8 @@ def test_non_serializable_params_rejected(registry: ToolRegistry) -> None:
 def test_agent_exception_chained_with_message_stripped(
     mock_router: Router, mock_discovery: DiscoveryEngine
 ) -> None:
-    """Exception messages must NOT be exposed to callers (PII protection)."""
     pii_secret = "super-secret-user-data-12345"
-    failing_agent = MockAgent(
-        "Failing", raise_on_execute=ValueError(f"boom: {pii_secret}")
-    )
+    failing_agent = MockAgent("Failing", raise_on_execute=ValueError(f"boom: {pii_secret}"))
     reg = ToolRegistry(
         agents={"failing": failing_agent},
         router=mock_router,
@@ -217,7 +210,6 @@ def test_agent_exception_chained_with_message_stripped(
 def test_agent_exception_has_cause(
     mock_router: Router, mock_discovery: DiscoveryEngine
 ) -> None:
-    """Exception chaining must be preserved via __cause__."""
     original = ValueError("original")
     failing_agent = MockAgent("Failing", raise_on_execute=original)
     reg = ToolRegistry(
@@ -255,21 +247,15 @@ def test_keyboard_interrupt_not_swallowed(
         reg.call_tool("bad", {"task_prompt": "x"})
 
 
-# ---------------------------------------------------------------------------
-# Timeout enforcement (NEW)
-# ---------------------------------------------------------------------------
-
-
 def test_timeout_enforced(
     mock_router: Router, mock_discovery: DiscoveryEngine
 ) -> None:
-    """A slow agent must trigger TIMEOUT error_code."""
     slow = MockAgent("Slow", sleep_sec=2.0)
     reg = ToolRegistry(
         agents={"slow": slow},
         router=mock_router,
         discovery_engine=mock_discovery,
-        timeout_sec=0.1,  # 100ms — much shorter than agent's 2s sleep
+        timeout_sec=0.1,
     )
     start = time.perf_counter()
     result = reg.call_tool("slow", {"task_prompt": "x"})
@@ -278,19 +264,12 @@ def test_timeout_enforced(
     assert result.status == "error"
     assert result.error_code == ErrorCode.TIMEOUT
     assert "timeout" in result.error.lower()
-    # Should have returned quickly, not waited for the full 2s sleep
     assert elapsed < 1.5
 
 
 def test_fast_agent_completes_before_timeout(registry: ToolRegistry) -> None:
-    """Normal agent must complete within default 300s timeout."""
     result = registry.call_tool("scout", {"task_prompt": "x"})
     assert result.status == "success"
-
-
-# ---------------------------------------------------------------------------
-# Router / Discovery failure paths (NEW)
-# ---------------------------------------------------------------------------
 
 
 def test_router_returns_none(mock_discovery: DiscoveryEngine) -> None:
@@ -334,11 +313,6 @@ def test_discovery_raises_exception(mock_router: Router) -> None:
     assert "OSError" in result.error
 
 
-# ---------------------------------------------------------------------------
-# PII protection
-# ---------------------------------------------------------------------------
-
-
 def test_params_never_logged(registry: ToolRegistry, caplog: pytest.LogCaptureFixture) -> None:
     secret = "super-secret-user-data-12345"
     with caplog.at_level(logging.DEBUG):
@@ -346,11 +320,6 @@ def test_params_never_logged(registry: ToolRegistry, caplog: pytest.LogCaptureFi
 
     for record in caplog.records:
         assert secret not in record.getMessage()
-
-
-# ---------------------------------------------------------------------------
-# Dependency validation
-# ---------------------------------------------------------------------------
 
 
 def test_invalid_agents_type_raises() -> None:
@@ -395,11 +364,6 @@ def test_invalid_timeout_raises(
         )
 
 
-# ---------------------------------------------------------------------------
-# Execution time tracking
-# ---------------------------------------------------------------------------
-
-
 def test_execution_time_tracked(registry: ToolRegistry) -> None:
     result = registry.call_tool("scout", {"task_prompt": "x"})
     assert result.execution_time_ms >= 0
@@ -411,15 +375,8 @@ def test_execution_time_tracked_on_error(registry: ToolRegistry) -> None:
     assert result.execution_time_ms >= 0
 
 
-# ---------------------------------------------------------------------------
-# Lazy __init__.py imports
-# ---------------------------------------------------------------------------
-
-
 def test_lazy_import_from_package() -> None:
-    """Verify __init__.py exposes all public symbols via lazy loading."""
     from src import companion
-
     assert companion.ToolRegistry is not None
     assert companion.ToolResult is not None
     assert companion.ToolSchema is not None
@@ -431,6 +388,5 @@ def test_lazy_import_from_package() -> None:
 
 def test_lazy_import_unknown_attribute_raises() -> None:
     from src import companion
-
     with pytest.raises(AttributeError):
         _ = companion.NonexistentSymbol
