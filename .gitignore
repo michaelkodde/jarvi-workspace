@@ -5,4 +5,5 @@ __pycache__/
 logs/
 01_proposals/
 03_ready_to_publish/
-.continue/
+.continue/brain/memories/business/
+brain/memories/personal/
