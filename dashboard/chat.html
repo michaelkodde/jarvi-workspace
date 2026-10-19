@@ -1,0 +1,79 @@
+<!-- dashboard/chat.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jarvi Chat</title>
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@15.0.7/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js"></script>
+    <link rel="stylesheet" href="/static/chat.css">
+</head>
+<body x-data="chatApp()" x-init="init()">
+    <noscript>
+        <div class="noscript-warning">
+            <h1>JavaScript Required</h1>
+            <p>Jarvi Chat requires JavaScript to function. Please enable JavaScript in your browser settings.</p>
+        </div>
+    </noscript>
+
+    <div class="chat-container" x-show="true">
+        <div class="chat-header">
+            <h1>Jarvi Chat</h1>
+            <div class="connection-status">
+                <span class="status-indicator" :class="wsStatus"></span>
+                <span x-text="wsStatusText"></span>
+            </div>
+        </div>
+
+        <div class="chat-messages" x-ref="messages">
+            <template x-if="messages.length === 0">
+                <div class="empty-state">
+                    <p>Start a conversation with Jarvi.</p>
+                </div>
+            </template>
+
+            <template x-for="msg in messages" :key="msg.id">
+                <div :class="`message ${msg.role}`">
+                    <template x-if="msg.role === 'assistant' && msg.type === 'markdown'">
+                        <div x-html="msg.content"></div>
+                    </template>
+                    <template x-if="!(msg.role === 'assistant' && msg.type === 'markdown')">
+                        <span x-text="msg.content"></span>
+                    </template>
+                </div>
+            </template>
+
+            <template x-if="hitlTicket">
+                <div class="hitl-prompt">
+                    <div class="hitl-title">Job requires approval (Tier <span x-text="hitlTicket.tier"></span>)</div>
+                    <div x-text="hitlTicket.preview" class="hitl-preview"></div>
+                    <div class="hitl-buttons">
+                        <button class="btn btn-approve" @click="approveHitl()" :disabled="wsStatus !== 'connected'">Approve</button>
+                        <button class="btn btn-reject" @click="rejectHitl()" :disabled="wsStatus !== 'connected'">Reject</button>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <div class="chat-input">
+            <input
+                type="text"
+                x-model="inputMessage"
+                @keyup.enter="sendMessage()"
+                placeholder="Type your message..."
+                :disabled="isProcessing || wsStatus !== 'connected'"
+            >
+            <button
+                @click="sendMessage()"
+                :disabled="isProcessing || !inputMessage.trim() || wsStatus !== 'connected'"
+            >
+                Send
+            </button>
+        </div>
+    </div>
+
+    <script src="/static/chat.js"></script>
+</body>
+</html>
