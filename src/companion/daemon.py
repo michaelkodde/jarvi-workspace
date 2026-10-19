@@ -125,6 +125,7 @@ class DaemonLoop:
         self,
         workspace_path: str | Path,
         pipeline_flow: Any,
+        context_injector: Any | None = None,  # <-- ADDED
         poll_interval_sec: float = 2.0,
         heartbeat_path: str | Path | None = None,
         lock_file_path: str | Path | None = None,
@@ -134,10 +135,11 @@ class DaemonLoop:
         if not isinstance(workspace_path, (str, Path)):
             raise DaemonError("workspace_path must be a str or Path", ErrorCode.INTERNAL)
         if not (0.1 <= poll_interval_sec <= 10.0):
-            raise DaemonError("poll_interval_sec must be between 0.5 and 10.", ErrorCode.INTERNAL)
+            raise DaemonError("poll_interval_sec must be between 0.1 and 10.", ErrorCode.INTERNAL)
 
         self.workspace = Path(workspace_path).resolve()
         self.pipeline_flow = pipeline_flow
+        self.context_injector = context_injector  # <-- ADDED
         self.poll_interval_sec = poll_interval_sec
         self.heartbeat_path = Path(heartbeat_path or self.workspace / "logs" / "daemon_heartbeat.json")
         self.lock_file_path = Path(lock_file_path or self.workspace / "logs" / "daemon.lock")
@@ -354,9 +356,21 @@ class DaemonLoop:
 
             # Submit to PipelineFlow
             try:
+                # 1. Enrich parameters with context (if injector is available)
+                final_parameters = ticket_data.get("parameters", {})
+                if self.context_injector is not None:
+                    try:
+                        context_result = self.context_injector.inject_context(job_type, final_parameters)
+                        if context_result.status == "success" and context_result.enriched_parameters:
+                            final_parameters = context_result.enriched_parameters
+                    except Exception as e:
+                        # Graceful degradation: log warning, proceed with original parameters
+                        logger.warning("Context injection failed for %s: %s. Proceeding without context.", ticket_id, type(e).__name__)
+
+                # 2. Submit the (potentially enriched) job
                 self.pipeline_flow.submit_job(
                     job_type=job_type,
-                    parameters=ticket_data.get("parameters", {}),
+                    parameters=final_parameters,
                     priority=ticket_data.get("priority", 5),
                     description=ticket_data.get("description", ""),
                 )
