@@ -33,3 +33,22 @@ class Analyst(BaseAgent):
             agent_name="Analyst",
             model_name=model_name,
         )
+    def execute(self, task_prompt: str, context: str | None = None) -> "AgentResult":
+        """
+        Executes the agent's primary task using inherited helpers.
+        """
+        from src.agents.base_agent import AgentResult
+        
+        # 1. Call the LLM using the inherited helper (playbook is auto-applied as system prompt)
+        response = self._call_llm(prompt=task_prompt, context=context)
+        
+        # 2. Clean the output using the inherited helper
+        cleaned_content = self._strip_markdown_fences(response.content)
+        
+        # 3. Return the standardized result
+        return AgentResult(
+            artifact=cleaned_content,
+            prompt_tokens=response.prompt_tokens,
+            completion_tokens=response.completion_tokens,
+            total_tokens=response.total_tokens,
+        )

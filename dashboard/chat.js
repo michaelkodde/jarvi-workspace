@@ -16,9 +16,7 @@ function chatApp() {
 
         init() {
             // Generate or restore conversation ID
-            this.conversationId =
-                localStorage.getItem('jarvi_conversation_id') ||
-                crypto.randomUUID().slice(0, 12);
+            this.conversationId = localStorage.getItem('jarvi_conversation_id') || crypto.randomUUID().replace(/-/g, '').slice(0, 12);
             localStorage.setItem('jarvi_conversation_id', this.conversationId);
             this.connectWebSocket();
         },

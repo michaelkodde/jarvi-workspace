@@ -371,12 +371,20 @@ class PipelineFlow:
                     logger.info("Job %s deferred", job.job_id)
                 return
             
-            # Persist step
+            # Persist step to SQLite
             artifacts[agent_name] = result.artifact
             completed_steps.append(step_name)
             self._queue.complete_step(
                 job.job_id, step_name, artifacts, tuple(completed_steps), elapsed_ms
             )
+            
+            # --- ICM Enhancement: Save artifact to filesystem for human inspection ---
+            from pathlib import Path
+            run_dir = Path("dashboard/runs") / job.job_id / step_name
+            run_dir.mkdir(parents=True, exist_ok=True)
+            (run_dir / "output.md").write_text(result.artifact, encoding="utf-8")
+            # ------------------------------------------------------------------------
+            
             logger.info("Job %s completed step %s (%dms)", job.job_id, step_name, elapsed_ms)
         
         # All steps completed (shouldn't happen with default pipeline, but handle it)

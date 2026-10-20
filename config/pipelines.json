@@ -5,12 +5,12 @@
         {
           "name": "scout",
           "type": "agent",
-          "agent": "Scout"
+          "agent": "scout"
         },
         {
           "name": "create",
           "type": "agent",
-          "agent": "Creator"
+          "agent": "creator"
         },
         {
           "name": "review",
@@ -19,7 +19,7 @@
         {
           "name": "publish",
           "type": "agent",
-          "agent": "Publisher"
+          "agent": "publisher"
         }
       ]
     }
