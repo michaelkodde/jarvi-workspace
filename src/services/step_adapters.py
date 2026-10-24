@@ -16,6 +16,7 @@ __all__ = [
     "scout_adapter",
     "creator_adapter",
     "publisher_adapter",
+    "coder_adapter",
     "guard_scout_artifact",
     "guard_creator_artifact",
     "map_publisher_status",
@@ -182,10 +183,52 @@ def publisher_adapter(
     return task_prompt, json.dumps(context_dict)
 
 
+def coder_adapter(
+    artifacts: Dict[str, str],
+    parameters: Dict[str, Any],
+    defaults: Dict[str, Any],
+) -> Tuple[str, str]:
+    """
+    Build inputs for the Coder agent.
+    Translates job parameters into the (task_prompt, context) format.
+    
+    Args:
+        artifacts: Previous artifacts (unused for Coder, as it reads directly from disk).
+        parameters: Job parameters (must include 'target_files').
+        defaults: Default configuration.
+        
+    Returns:
+        Tuple of (task_prompt, context).
+        
+    Raises:
+        AdapterError: If required parameters are missing or invalid.
+    """
+    # 1. STRICT VALIDATION: Ensure target_files exists and is a valid string
+    target_files = parameters.get("target_files")
+    if not target_files or not isinstance(target_files, str):
+        raise AdapterError("Missing or invalid required parameter: 'target_files' (must be a comma-separated string of file paths)")
+    
+    # Clean the string to prevent parsing errors in the agent
+    target_files = target_files.strip()
+    if not target_files:
+        raise AdapterError("'target_files' cannot be an empty string")
+
+    # 2. Build task prompt with safe, typed defaults
+    focus = parameters.get("focus", "Review the code for bugs, anti-patterns, and Constitution violations.")
+    if not isinstance(focus, str):
+        focus = str(focus)
+        
+    task_prompt = focus
+    context = target_files
+    
+    return task_prompt, context
+
+
 ADAPTER_REGISTRY: Dict[str, Callable] = {
     "scout": scout_adapter,
     "creator": creator_adapter,
     "publisher": publisher_adapter,
+    "coder": coder_adapter,
 }
 
 

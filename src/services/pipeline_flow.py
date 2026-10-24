@@ -74,6 +74,11 @@ def _import_agent_exceptions() -> tuple:
         exceptions.append(PublicationError)
     except (ImportError, AttributeError):
         pass
+    try:
+        from src.agents.coder import CoderError
+        exceptions.append(CoderError)
+    except (ImportError, AttributeError):
+        pass
     return tuple(exceptions)
 
 

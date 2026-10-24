@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, Callable
-
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 
@@ -44,7 +44,7 @@ _IDEMPOTENCY_TTL_SEC = 60
 _RESULT_PREVIEW_MAX_CHARS = 500
 _POLL_INTERVAL_SEC = 2.0
 _MAX_POLLING_DURATION_SEC = 3600  # 1 hour hard timeout
-_CONVERSATION_ID_RE = re.compile(r"^[a-z0-9_]{8,32}$")
+_CONVERSATION_ID_RE = re.compile(r"^[a-z0-9_-]{8,32}$")
 _DEFAULT_CLARIFYING_QUESTION = (
     "I'm not sure I understand. Could you clarify what you need?"
 )
@@ -424,6 +424,7 @@ class ChatServer:
         router: Any,
         memory_engine: Any,
         auth_token: str | None = None,
+        lifespan: Any = None,
     ) -> None:
         if not hasattr(pipeline_flow, "submit_job"):
             raise ChatError(
@@ -452,7 +453,17 @@ class ChatServer:
         dashboard_dir = self.workspace / "dashboard"
         dashboard_dir.mkdir(parents=True, exist_ok=True)
 
-        self.app = FastAPI(title="Jarvi Chat Server")
+        self.app = FastAPI(title="Jarvi Chat Server", lifespan=lifespan)
+        
+        self.app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["http://127.0.0.1:8000", "http://localhost:8000"],
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+        # ------------------------------------------
+
         self._setup_routes()
 
     # ------------------------------------------------------------------------

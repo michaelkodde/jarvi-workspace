@@ -2,8 +2,10 @@
 """
 Entry point for running the Jarvi Chat Server with real dependencies.
 """
+import asyncio
 import logging
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -40,6 +42,7 @@ from src.agents.creator import Creator
 from src.agents.publisher import Publisher
 from src.agents.scout import Scout
 from src.agents.trend_spotter import TrendSpotter
+from src.agents.coder import Coder  # <-- NEW: Import Coder Agent
 
 from src.utils.llm_client import query_ollama, OllamaResponse
 from src.utils.token_ledger import TokenLedger
@@ -55,17 +58,83 @@ class OllamaClient:
 
 WORKSPACE = Path(__file__).parent.resolve()
 
+# ============================================================================
+# 2.5. BACKGROUND TASKS (LIFESPAN)
+# ============================================================================
+REVIEW_INTERVAL_SECONDS = 10  # MUST BE 10 FOR TESTING (Change to 86400 for production)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Manage background tasks for the Jarvi application.
+    Ensures graceful startup and shutdown of asynchronous maintenance loops.
+    """
+    logger.info("🔄 Starting background maintenance tasks...")
+    
+    async def periodic_code_review():
+        """Background loop that periodically submits code review jobs."""
+        logger.info(f"🕒 Background review task STARTED. Interval: {REVIEW_INTERVAL_SECONDS}s")
+        try:
+            while True:
+                logger.info(f"💤 Sleeping for {REVIEW_INTERVAL_SECONDS} seconds...")
+                await asyncio.sleep(REVIEW_INTERVAL_SECONDS)
+                
+                logger.info("⏰ Triggering periodic code review...")
+                try:
+                    # Access pipeline_flow safely from app state (no globals)
+                    pf = getattr(app.state, "pipeline_flow", None)
+                    
+                    if pf is not None:
+                        logger.info("📝 Submitting job to PipelineFlow...")
+                        pf.submit_job(
+                            job_type="code_review_pipeline",
+                            parameters={
+                                "target_files": "src/agents/analyst.py,src/agents/base_agent.py,src/companion/chat_server.py",
+                                "focus": "Check for exception chaining, token ledger usage, and BaseAgent contract compliance."
+                            },
+                            priority=1,
+                            description="Automated daily codebase health check"
+                        )
+                        logger.info("✅ Code review job submitted to queue.")
+                    else:
+                        logger.error("❌ pipeline_flow not found in app.state. Cannot submit job.")
+                        
+                except Exception as e:
+                    # Log full traceback for debugging, but do not crash the background loop
+                    logger.error(f"❌ Failed to submit periodic review job: {type(e).__name__}: {str(e)}", exc_info=True)
+                    
+        except asyncio.CancelledError:
+            logger.info("🛑 Background review task gracefully cancelled.")
+        except Exception as e:
+            # Catch-all for unexpected loop crashes
+            logger.error(f"💥 Background review task crashed: {type(e).__name__}: {str(e)}", exc_info=True)
+
+    # Start the background task
+    logger.info("🚀 Creating asyncio task for periodic review...")
+    review_task = asyncio.create_task(periodic_code_review())
+    
+    yield  # Application runs here
+    
+    # Shutdown: Gracefully cancel and await the task
+    logger.info("🛑 Cancelling periodic review task...")
+    review_task.cancel()
+    try:
+        await review_task
+    except asyncio.CancelledError:
+        pass  # Expected behavior during shutdown
+    logger.info("🛑 Stopped periodic code review task.")
+
 
 # ============================================================================
 # 3. APP FACTORY
 # ============================================================================
 def create_app() -> FastAPI:
     """Factory function to create and configure the ChatServer FastAPI app."""
+    global _pipeline_flow_ref
     logger.info("🚀 Initializing Jarvi Real Components...")
 
     try:
         # 1. Memory Engine (Persistence & Context)
-        # <-- UPDATED: Added 'scope' argument
         memory_engine = MemoryEngine(
             workspace_path=WORKSPACE, 
             scope=CONFIG["memory_scope"]
@@ -103,6 +172,13 @@ def create_app() -> FastAPI:
             "creator": Creator(llm_client=agent_client, token_ledger=token_ledger, model_name=CONFIG["agent_model"], playbook_path=str(playbook_dir / "creator.md")),
             "publisher": Publisher(llm_client=agent_client, token_ledger=token_ledger, model_name=CONFIG["agent_model"], playbook_path=str(playbook_dir / "publisher.md")),
             "trend_spotter": TrendSpotter(llm_client=agent_client, token_ledger=token_ledger, model_name=CONFIG["agent_model"], playbook_path=str(playbook_dir / "trend_spotter.md")),
+            # --- NEW: Coder Agent ---
+            "coder": Coder(
+                llm_client=agent_client,
+                token_ledger=token_ledger,
+                model_name=CONFIG["agent_model"],
+                playbook_path=str(playbook_dir / "coder.md")
+            ),
         }
         logger.info(f"✅ Initialized {len(agents)} agents (Model: {CONFIG['agent_model']}).")
 
@@ -111,6 +187,11 @@ def create_app() -> FastAPI:
             agents=agents,
             pipeline_definitions_path=str(config_path)
         )
+
+        pipeline_flow.start_worker()
+
+        # Assign to global reference so the lifespan background task can access it
+        _pipeline_flow_ref = pipeline_flow
         logger.info("✅ PipelineFlow initialized.")
 
         # 4. Query API (HITL & Status)
@@ -125,7 +206,9 @@ def create_app() -> FastAPI:
             router=router,
             memory_engine=memory_engine,
             auth_token=AUTH_TOKEN,
+            lifespan=lifespan,
         )
+        chat_server.app.state.pipeline_flow = pipeline_flow
 
         if AUTH_TOKEN:
             logger.info("🔒 Auth token detected. WebSocket connections will require authentication.")

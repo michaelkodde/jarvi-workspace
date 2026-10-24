@@ -2,24 +2,22 @@
   "pipelines": {
     "content_pipeline": {
       "steps": [
-        {
-          "name": "scout",
-          "type": "agent",
-          "agent": "scout"
+        { "name": "scout", "type": "agent", "agent": "scout" },
+        { "name": "create", "type": "agent", "agent": "creator" },
+        { "name": "review", "type": "hitl" },
+        { "name": "publish", "type": "agent", "agent": "publisher" }
+      ]
+    },
+    "code_review_pipeline": {
+      "steps": [
+        { 
+          "name": "analyze_and_patch", 
+          "type": "agent", 
+          "agent": "coder" 
         },
-        {
-          "name": "create",
-          "type": "agent",
-          "agent": "creator"
-        },
-        {
-          "name": "review",
-          "type": "hitl"
-        },
-        {
-          "name": "publish",
-          "type": "agent",
-          "agent": "publisher"
+        { 
+          "name": "human_review_gate", 
+          "type": "hitl" 
         }
       ]
     }
