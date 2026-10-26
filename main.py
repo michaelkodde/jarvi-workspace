@@ -54,6 +54,7 @@ class OllamaClient:
         self.model_name = model_name
         
     def __call__(self, prompt: str, system_prompt: str = None, **kwargs) -> OllamaResponse:
+        kwargs.pop('model', None)
         return query_ollama(model=self.model_name, prompt=prompt, system_prompt=system_prompt, **kwargs)
 
 WORKSPACE = Path(__file__).parent.resolve()
@@ -61,7 +62,7 @@ WORKSPACE = Path(__file__).parent.resolve()
 # ============================================================================
 # 2.5. BACKGROUND TASKS (LIFESPAN)
 # ============================================================================
-REVIEW_INTERVAL_SECONDS = 10  # MUST BE 10 FOR TESTING (Change to 86400 for production)
+REVIEW_INTERVAL_SECONDS = 86400  
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -143,12 +144,15 @@ def create_app() -> FastAPI:
 
         # 2. Router (Intent Classification)
         playbook_path = WORKSPACE / CONFIG["playbook_path"]
+        pipeline_config_path = WORKSPACE / CONFIG["pipeline_config"]
+
         if not playbook_path.exists():
             raise FileNotFoundError(f"Router playbook not found at {playbook_path}")
         
         router = Router(
             ollama_model=CONFIG["router_model"],
-            playbook_path=str(playbook_path)
+            playbook_path=str(playbook_path),
+            pipeline_config_path=str(pipeline_config_path),
         )
         logger.info(f"✅ Router initialized (Model: {CONFIG['router_model']}).")
 

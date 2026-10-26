@@ -1,76 +1,92 @@
+# src/agents/coder.py
+from __future__ import annotations
+import subprocess
 import logging
-import traceback
 from pathlib import Path
-from typing import Any
+from typing import Callable
 
-from src.agents.coder import Coder
+from src.agents.base_agent import BaseAgent, AgentResult
+from src.utils.llm_client import OllamaResponse
 from src.utils.token_ledger import TokenLedger
-from src.utils.llm_client import query_ollama, OllamaResponse
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
 logger = logging.getLogger(__name__)
 
-WORKSPACE = Path(__file__).parent.resolve()
+class CoderError(Exception):
+    """Custom exception for Coder agent failures, compliant with Jarvi error standards."""
+    def __init__(self, message: str, error_code: str = "CODER_EXECUTION_FAILED"):
+        super().__init__(message)
+        self.error_code = error_code
 
 
-class TestOllamaClient:
-    def __init__(self, model_name: str):
-        self.model_name = model_name
-        
-    def __call__(self, prompt: str, system_prompt: str | None = None, **kwargs: Any) -> OllamaResponse:
-        # FIX: Remove 'model' from kwargs if BaseAgent passed it to avoid duplicate
-        kwargs.pop('model', None)
-        return query_ollama(
-            model=self.model_name, 
-            prompt=prompt, 
-            system_prompt=system_prompt, 
-            **kwargs
+class Coder(BaseAgent):
+    """
+    Autonomous code review and patching agent.
+    Integrates with PipelineFlow for queued, HITL-gated code hardening.
+    """
+
+    def __init__(
+        self,
+        llm_client: Callable[..., OllamaResponse],
+        token_ledger: TokenLedger,
+        model_name: str,
+        playbook_path: str = "src/agents/playbooks/coder.md",
+    ) -> None:
+        super().__init__(
+            llm_client=llm_client,
+            token_ledger=token_ledger,
+            playbook_path=playbook_path,
+            agent_name="Coder",
+            model_name=model_name,
         )
 
+    def execute(self, task_prompt: str, context: str | None = None) -> AgentResult:
+        try:
+            target_files = [p.strip() for p in (context or "").split(",") if p.strip()]
+            if not target_files:
+                raise CoderError("No target files provided in context", error_code="NO_TARGET_FILES")
 
-def main() -> None:
-    logger.info(f"Starting isolated Coder Agent test from: {WORKSPACE}")
-    
-    try:
-        ledger = TokenLedger()
-        client = TestOllamaClient("qwen2.5:7b")
-        
-        playbook_path = WORKSPACE / "src" / "agents" / "playbooks" / "coder.md"
-        logger.info(f"Looking for playbook at: {playbook_path}")
-        
-        if not playbook_path.exists():
-            raise FileNotFoundError(f"Playbook not found at {playbook_path}")
-        
-        logger.info("Initializing Coder Agent...")
-        coder = Coder(
-            llm_client=client,
-            token_ledger=ledger,
-            model_name="qwen2.5:7b",
-            playbook_path=str(playbook_path)
-        )
-        logger.info("Agent initialized successfully.")
-        
-        target_1 = str(WORKSPACE / "src" / "agents" / "base_agent.py")
-        target_2 = str(WORKSPACE / "src" / "agents" / "analyst.py")
-        
-        logger.info(f"Executing agent on: {target_1}, {target_2}")
-        result = coder.execute(
-            task_prompt="Check for exception chaining and BaseAgent contract compliance.",
-            context=f"{target_1},{target_2}"
-        )
-        
-        logger.info("SUCCESS! Agent returned artifact:")
-        logger.info("-" * 80)
-        logger.info(result.artifact[:1000])
-        logger.info("-" * 80)
-        
-    except Exception as e:
-        logger.error("FAILED with traceback:")
-        traceback.print_exc()
+            code_context = ""
+            for file_path in target_files:
+                path = Path(file_path)
+                if path.exists():
+                    code_context += f"\n=== {file_path} ===\n{path.read_text(encoding='utf-8')}\n"
+                else:
+                    code_context += f"\n=== {file_path} ===\n[FILE NOT FOUND]\n"
 
+            response = self._call_llm(prompt=task_prompt, context=code_context)
+            cleaned_artifact = self._strip_markdown_fences(response.content)
 
-if __name__ == "__main__":
-    main()
+            try:
+                test_result = subprocess.run(
+                    ["python", "-m", "pytest", "tests/", "-v", "--tb=short"],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                    cwd=Path.cwd(),
+                )
+                test_status = test_result.stdout if test_result.returncode == 0 else f"FAILURES:\n{test_result.stdout}\n{test_result.stderr}"
+            except subprocess.TimeoutExpired:
+                test_status = "Pytest execution timed out after 60 seconds."
+            except Exception as test_err:
+                test_status = f"Pytest execution failed: {test_err}"
+
+            final_artifact = f"## Code Review & Patch Proposal\n\n{cleaned_artifact}\n\n## Current Test Status\n```\n{test_status}\n```"
+
+            return AgentResult(
+                agent_name=self.agent_name,
+                artifact=final_artifact,
+                token_usage={
+                    "prompt_tokens": response.prompt_tokens,
+                    "completion_tokens": response.completion_tokens,
+                    "total_tokens": response.total_tokens,
+                }
+            )
+
+        except CoderError:
+            raise
+        except Exception as e:
+            logger.error(f"💥 CODER AGENT CRASHED: {type(e).__name__}: {str(e)}")
+            raise CoderError(
+                f"Coder execution failed: {type(e).__name__}: {str(e)}",
+                error_code="UNEXPECTED_EXECUTION_FAILURE"
+            ) from e

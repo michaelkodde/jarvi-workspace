@@ -81,7 +81,7 @@ class BaseAgent(ABC):
             model=self.model_name,
             prompt=full_prompt,
             system_prompt=system_prompt or self.playbook,
-            options={"keep_alive": "5m"},
+            options={"keep_alive": "-1"},
         )
         
         self.token_ledger.log_usage(

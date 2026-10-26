@@ -20,6 +20,8 @@ __all__ = [
     "guard_scout_artifact",
     "guard_creator_artifact",
     "map_publisher_status",
+    "trend_spotter_adapter",
+    "analyst_adapter",
 ]
 
 
@@ -223,12 +225,39 @@ def coder_adapter(
     
     return task_prompt, context
 
+def trend_spotter_adapter(
+    artifacts: Dict[str, str],
+    parameters: Dict[str, Any],
+    defaults: Dict[str, Any],
+) -> Tuple[str, str]:
+    """Build inputs for the Trend Spotter agent."""
+    query = parameters.get("query", "")
+    if not query or not isinstance(query, str):
+        raise AdapterError("Missing or invalid required parameter: 'query'")
+    
+    # Trend spotter just needs the user's prompt as the task
+    return query, ""
+
+
+def analyst_adapter(
+    artifacts: Dict[str, str],
+    parameters: Dict[str, Any],
+    defaults: Dict[str, Any],
+) -> Tuple[str, str]:
+    """Build inputs for the Analyst agent."""
+    query = parameters.get("query", "")
+    if not query or not isinstance(query, str):
+        raise AdapterError("Missing or invalid required parameter: 'query'")
+    
+    return query, ""
 
 ADAPTER_REGISTRY: Dict[str, Callable] = {
     "scout": scout_adapter,
     "creator": creator_adapter,
     "publisher": publisher_adapter,
     "coder": coder_adapter,
+    "trend_spotter": trend_spotter_adapter,
+    "analyst": analyst_adapter,
 }
 
 

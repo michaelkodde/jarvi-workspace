@@ -17,7 +17,7 @@ from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponen
 logger = logging.getLogger(__name__)
 
 # --- Gold Standard: Module Constants ---
-CONNECT_TIMEOUT = 5
+CONNECT_TIMEOUT = 60
 READ_TIMEOUT = 180
 MODEL_KEEP_ALIVE = "10m"
 CONFIG_TTL = 60  # Cache config for 60 seconds to balance live updates vs disk I/O
@@ -115,7 +115,7 @@ def verify_model_available(model: str) -> bool:
     base_url = _get_ollama_url()
     try:
         # Use a short timeout for fast service discovery
-        response = requests.get(f"{base_url}/api/tags", timeout=2.0)
+        response = requests.get(f"{base_url}/api/tags", timeout=120)
         response.raise_for_status()
         models = [m["name"] for m in response.json().get("models", [])]
         # Check for exact match or if the requested model is a substring of an available model
@@ -183,7 +183,7 @@ def query_ollama(
     actual_timeout = timeout or (CONNECT_TIMEOUT, READ_TIMEOUT)
     
     try:
-        response = _get_session().post(url, json=payload, timeout=actual_timeout)
+        response = _get_session().post(url, json=payload, timeout=120)
         response.raise_for_status()
         
         try:

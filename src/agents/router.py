@@ -27,7 +27,8 @@ __all__ = ["Router", "RoutingResult", "RoutingError"]
 
 MAX_INPUT_CHARS = 6000
 MIN_CONFIDENCE = 0.7
-DEFAULT_AGENT = "general"
+# Changed from "general" to "analyst" as "analyst" is a valid fallback pipeline
+DEFAULT_AGENT = "analyst"
 DEFAULT_MODEL = "qwen2.5:7b"
 
 _OUTPUT_CONTRACT = (
@@ -36,7 +37,7 @@ _OUTPUT_CONTRACT = (
     "Output ONE JSON object. No markdown, no prose, no code fences.\n"
     "Required keys: target_agent (string), target_model (string), "
     "confidence (number between 0 and 1).\n"
-    'Example: {"target_agent":"general","target_model":"qwen2.5:7b","confidence":0.9}\n'
+    'Example: {"target_agent":"analyst","target_model":"qwen2.5:7b","confidence":0.9}\n'
 )
 
 
@@ -49,7 +50,7 @@ class RoutingResult:
     """A routing decision.
 
     Attributes:
-        target_agent: Specialist that should handle the request.
+        target_agent: Specialist pipeline that should handle the request.
         target_model: Model the pipeline should load next.
         cleaned_prompt: Original request, length-bounded but never rewritten.
         confidence: Model's stated confidence, between 0.0 and 1.0.
@@ -69,9 +70,9 @@ class Router:
     Args:
         ollama_model: Lightweight model used for routing (e.g., qwen2.5:3b).
         playbook_path: Markdown policy injected as the system message.
+        pipeline_config_path: Path to pipelines.json for dynamic registry.
         llm_callable: Injected inference callable. Defaults to query_ollama.
-        token_ledger: Injected ledger. A workspace-default ledger is used if
-            omitted; tests must always inject one to stay isolated.
+        token_ledger: Injected ledger.
 
     Raises:
         FileNotFoundError: If the playbook does not exist.
@@ -82,25 +83,53 @@ class Router:
         self,
         ollama_model: str,
         playbook_path: str,
+        pipeline_config_path: str = "config/pipelines.json",
         llm_callable: Callable[..., OllamaResponse] = query_ollama,
         token_ledger: TokenLedger | None = None,
     ) -> None:
         self._model = ollama_model
         self._playbook_path = Path(playbook_path)
+        self._pipeline_config_path = Path(pipeline_config_path)
         self._llm = llm_callable
         self._ledger = token_ledger if token_ledger is not None else TokenLedger()
-        self._system_prompt = self._load_playbook()
+        
+        # 1. Load valid pipelines from the single source of truth
+        self._valid_pipelines = self._load_valid_pipelines()
+        
+        # 2. Build the system prompt with dynamic registry injection
+        self._system_prompt = self._load_playbook() + self._build_registry_injection()
+
+    def _load_valid_pipelines(self) -> list[str]:
+        """Load valid pipeline names from config/pipelines.json."""
+        if not self._pipeline_config_path.exists():
+            logger.warning(
+                "Pipeline config not found at %s. Using hardcoded fallbacks.", 
+                self._pipeline_config_path
+            )
+            return ["analyst", "scout", "trendspotter", "content_pipeline", "code_review_pipeline"]
+        
+        try:
+            with open(self._pipeline_config_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return list(data.get("pipelines", {}).keys())
+        except (json.JSONDecodeError, OSError) as e:
+            logger.error("Failed to parse pipeline config: %s. Using fallbacks.", e)
+            return ["analyst", "scout", "trendspotter", "content_pipeline", "code_review_pipeline"]
+
+    def _build_registry_injection(self) -> str:
+        """Dynamically inject the valid pipeline list into the system prompt."""
+        pipelines_str = ", ".join(f'"{p}"' for p in self._valid_pipelines)
+        fallback = "analyst" if "analyst" in self._valid_pipelines else self._valid_pipelines[0]
+        
+        return (
+            f"\n\n## STRICT ROUTING REGISTRY (DO NOT DEVIATE)\n"
+            f"You MUST set 'target_agent' to EXACTLY one of these valid pipeline names: {pipelines_str}.\n"
+            f"Do not invent new names. Do not use variations (e.g., use 'trendspotter', not 'trend_spotter').\n"
+            f"If the request does not clearly match one, default to '{fallback}'."
+        )
 
     def _load_playbook(self) -> str:
-        """Load and validate the routing policy.
-
-        Returns:
-            The playbook text, cached for the lifetime of the instance.
-
-        Raises:
-            FileNotFoundError: If the playbook is missing.
-            ValueError: If the playbook contains no policy.
-        """
+        """Load and validate the routing policy."""
         if not self._playbook_path.exists():
             logger.critical("Router playbook missing: %s", self._playbook_path)
             raise FileNotFoundError(f"Router playbook not found: {self._playbook_path}")
@@ -114,21 +143,7 @@ class Router:
 
     @staticmethod
     def _extract_json(text: str) -> dict[str, Any]:
-        """Extract the first complete JSON object from model output.
-
-        ``raw_decode`` stops at the end of the first object, so markdown
-        fences, trailing commentary, and nested braces are handled without
-        regular expressions.
-
-        Args:
-            text: Raw model output.
-
-        Returns:
-            The decoded JSON object.
-
-        Raises:
-            ValueError: If no decodable JSON object is present.
-        """
+        """Extract the first complete JSON object from model output."""
         start = text.find("{")
         if start == -1:
             raise ValueError("No JSON object in router output.")
@@ -145,41 +160,17 @@ class Router:
 
     @staticmethod
     def _validate_routing_data(data: dict[str, Any]) -> tuple[str, str, float]:
-        """Validate and extract required fields from the model's JSON output.
-
-        Local 3B/7B models frequently omit fields or return wrong types.
-        This method enforces strict validation.
-
-        Args:
-            data: Decoded JSON object from the model.
-
-        Returns:
-            Tuple of (target_agent, target_model, confidence).
-
-        Raises:
-            RoutingError: If any required field is missing, empty, or invalid.
-        """
-        # Validate target_agent
+        """Validate and extract required fields from the model's JSON output."""
         target_agent = data.get("target_agent")
-        if not target_agent:
-            raise RoutingError("Missing or empty 'target_agent' field.")
-        if not isinstance(target_agent, str):
-            raise RoutingError(f"'target_agent' must be a string, got {type(target_agent).__name__}.")
+        if not target_agent or not isinstance(target_agent, str) or not target_agent.strip():
+            raise RoutingError("Missing or invalid 'target_agent' field.")
         target_agent = target_agent.strip()
-        if not target_agent:
-            raise RoutingError("'target_agent' is empty after stripping whitespace.")
 
-        # Validate target_model
         target_model = data.get("target_model")
-        if not target_model:
-            raise RoutingError("Missing or empty 'target_model' field.")
-        if not isinstance(target_model, str):
-            raise RoutingError(f"'target_model' must be a string, got {type(target_model).__name__}.")
+        if not target_model or not isinstance(target_model, str) or not target_model.strip():
+            raise RoutingError("Missing or invalid 'target_model' field.")
         target_model = target_model.strip()
-        if not target_model:
-            raise RoutingError("'target_model' is empty after stripping whitespace.")
 
-        # Validate confidence with defensive type coercion
         raw_confidence = data.get("confidence")
         if raw_confidence is None:
             raise RoutingError("Missing 'confidence' field.")
@@ -187,25 +178,15 @@ class Router:
         try:
             confidence = float(raw_confidence)
         except (ValueError, TypeError) as exc:
-            raise RoutingError(
-                f"'confidence' must be a number, got {type(raw_confidence).__name__}: {raw_confidence}"
-            ) from exc
+            raise RoutingError(f"'confidence' must be a number, got {type(raw_confidence).__name__}") from exc
 
-        # Validate range
         if not 0.0 <= confidence <= 1.0:
             raise RoutingError(f"Confidence {confidence} is outside valid range [0.0, 1.0].")
 
         return target_agent, target_model, confidence
 
     def _record_usage(self, usage: dict[str, int]) -> None:
-        """Bill the model that actually ran: the router, not the target.
-
-        Accounting is best-effort. A full disk or a bad price map must never
-        take down a routing decision that already succeeded.
-
-        Args:
-            usage: Token counts from a completed router call.
-        """
+        """Bill the model that actually ran: the router, not the target."""
         try:
             self._ledger.log_usage(
                 TokenUsage(
@@ -220,22 +201,7 @@ class Router:
             logger.error("Token accounting failed; routing continues: %s", exc)
 
     def route(self, raw_prompt: str) -> RoutingResult:
-        """Classify a request into a specialist route.
-
-        Every terminal path records token usage, including malformed
-        responses and low-confidence fallbacks. Only a transport failure
-        before any response is received records zero usage.
-
-        Args:
-            raw_prompt: Untrusted user request.
-
-        Returns:
-            A routing decision with the prompt carried forward unchanged.
-
-        Raises:
-            RoutingError: If the model's response cannot be parsed or its
-                confidence is outside the valid range.
-        """
+        """Classify a request into a specialist route."""
         started = time.perf_counter()
 
         if len(raw_prompt) > MAX_INPUT_CHARS:
@@ -252,19 +218,13 @@ class Router:
                 prompt=message,
                 system_prompt=self._system_prompt,
                 options={"temperature": 0.0, "num_predict": 128},
-                timeout=(0.5, 1.0),
+                timeout=(1.0, 10),
             )
         except OllamaAPIError as exc:
             logger.critical("Router unavailable; degrading to %s: %s", DEFAULT_AGENT, exc)
-            fallback_usage = {
-                "prompt_tokens": 0,
-                "completion_tokens": 0,
-                "total_tokens": 0,
-            }
+            fallback_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
             self._record_usage(fallback_usage)
-            return RoutingResult(
-                DEFAULT_AGENT, DEFAULT_MODEL, prompt, 0.0, fallback_usage
-            )
+            return RoutingResult(DEFAULT_AGENT, DEFAULT_MODEL, prompt, 0.0, fallback_usage)
         except Exception as exc:
             logger.critical("Unexpected router transport failure: %s", exc)
             raise RoutingError("Unexpected router transport failure.") from exc
@@ -278,23 +238,27 @@ class Router:
         try:
             data = self._extract_json(response.content)
             target_agent, target_model, confidence = self._validate_routing_data(data)
+            
+            # --- DYNAMIC REGISTRY ENFORCEMENT ---
+            if target_agent not in self._valid_pipelines:
+                fallback_agent = "analyst" if "analyst" in self._valid_pipelines else self._valid_pipelines[0]
+                logger.warning(
+                    "Router hallucinated invalid target_agent '%s'. Falling back to '%s'. Valid: %s",
+                    target_agent, fallback_agent, self._valid_pipelines
+                )
+                target_agent = fallback_agent
+            # ------------------------------------
+            
         except RoutingError:
-            # Validation failures are already RoutingErrors; just record usage and re-raise
             self._record_usage(usage)
             raise
         except (ValueError, TypeError) as exc:
             self._record_usage(usage)
-            raise RoutingError(
-                f"Malformed router response: {response.content[:100]}"
-            ) from exc
+            raise RoutingError(f"Malformed router response: {response.content[:100]}") from exc
 
         if confidence < MIN_CONFIDENCE:
-            logger.warning(
-                "Low confidence (%.2f); degrading to %s.", confidence, DEFAULT_AGENT
-            )
-            result = RoutingResult(
-                DEFAULT_AGENT, DEFAULT_MODEL, prompt, 0.0, usage
-            )
+            logger.warning("Low confidence (%.2f); degrading to %s.", confidence, DEFAULT_AGENT)
+            result = RoutingResult(DEFAULT_AGENT, DEFAULT_MODEL, prompt, 0.0, usage)
         else:
             result = RoutingResult(
                 target_agent=target_agent,

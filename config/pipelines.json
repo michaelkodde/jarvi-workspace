@@ -10,15 +10,23 @@
     },
     "code_review_pipeline": {
       "steps": [
-        { 
-          "name": "analyze_and_patch", 
-          "type": "agent", 
-          "agent": "coder" 
-        },
-        { 
-          "name": "human_review_gate", 
-          "type": "hitl" 
-        }
+        { "name": "analyze_and_patch", "type": "agent", "agent": "coder" },
+        { "name": "human_review_gate", "type": "hitl" }
+      ]
+    },
+    "trendspotter": {
+      "steps": [
+        { "name": "analyze_market", "type": "agent", "agent": "trend_spotter" }
+      ]
+    },
+    "scout": {
+      "steps": [
+        { "name": "research", "type": "agent", "agent": "scout" }
+      ]
+    },
+    "analyst": {
+      "steps": [
+        { "name": "analyze", "type": "agent", "agent": "analyst" }
       ]
     }
   }
