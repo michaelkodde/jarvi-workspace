@@ -905,29 +905,21 @@ class ChatServer:
     # Background Polling
     # ------------------------------------------------------------------------
     async def _poll_job_status(self, websocket: WebSocket, ticket_id: str) -> None:
-        """Background task to poll job status and stream updates.
-
-        Includes hard timeout to prevent resource leaks on stuck jobs.
-
-        Args:
-            websocket: WebSocket connection.
-            ticket_id: Ticket identifier.
-        """
+        """Background task to poll job status and stream updates."""
         start_time = time.time()
+        last_status = None  # Track last sent status to avoid spam
+        last_step = None    # Track last sent step to avoid spam
+        
         try:
             while True:
-                # Hard timeout to prevent infinite polling
                 if time.time() - start_time > _MAX_POLLING_DURATION_SEC:
-                    logger.warning(
-                        "Polling timeout reached for ticket_id=%s", ticket_id
-                    )
+                    logger.warning("Polling timeout reached for ticket_id=%s", ticket_id)
                     await self._send_error(websocket, "Job timed out")
                     self.manager.clear_active_ticket(websocket)
                     break
 
                 try:
                     status_result = self.query_api.get_job_status(ticket_id)
-                    # Defensive extraction - handle various return shapes
                     job_status = getattr(status_result, "status", None)
                     if job_status is None and isinstance(status_result, dict):
                         job_status = status_result.get("status", "unknown")
@@ -940,6 +932,9 @@ class ChatServer:
                         job.get("current_step", "") if isinstance(job, dict) else ""
                     )
 
+                    # --- ONLY SEND UPDATE IF STATUS CHANGED ---
+                    status_changed = (job_status != last_status or current_step != last_step)
+                    
                     if job_status == "pending_review":
                         if not self.manager.has_hitl_been_sent(websocket, ticket_id):
                             await self.manager.send_event(
@@ -972,7 +967,7 @@ class ChatServer:
                         await self._send_error(websocket, "Job failed")
                         self.manager.clear_active_ticket(websocket)
                         break
-                    else:
+                    elif status_changed:  # Only send status update if it changed
                         await self.manager.send_event(
                             websocket,
                             WSEvent(
@@ -984,6 +979,9 @@ class ChatServer:
                                 },
                             ),
                         )
+                        last_status = job_status
+                        last_step = current_step
+                    # -----------------------------------------
 
                 except Exception as e:
                     logger.error("Polling error: %s", type(e).__name__)

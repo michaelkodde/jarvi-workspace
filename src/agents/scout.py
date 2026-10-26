@@ -6,7 +6,7 @@ import json
 import logging
 import math
 from pathlib import Path
-from typing import Callable, List
+from typing import Callable
 
 from src.agents.base_agent import AgentResult, BaseAgent
 from src.utils.llm_client import OllamaResponse
@@ -70,18 +70,13 @@ class Scout(BaseAgent):
         """Checks if a brand is in the banned list."""
         return brand.lower() in self.banned_brands
 
-    def execute(self, task_prompt: str, context: str) -> AgentResult:
+    def execute(self, task_prompt: str, context: str | None = None) -> AgentResult:
         """
         Executes the dynamic saturation loop to find verified products.
-        
-        Args:
-            task_prompt: The specific product type to search for.
-            context: The Analyst's Ethical Validation and proof criteria ONLY.
-            
-        Returns:
-            AgentResult containing a strict JSON array of verified products.
         """
-        run_id = hashlib.md5(f"{task_prompt}_{context}".encode()).hexdigest()
+        # Handle None context gracefully
+        safe_context = context or ""
+        run_id = hashlib.md5(f"{task_prompt}_{safe_context}".encode()).hexdigest()
         
         # Load checkpoint if exists
         state = self.checkpoint.load_state(run_id)
@@ -120,31 +115,19 @@ class Scout(BaseAgent):
             # Saturation assessment
             scraped_json = json.dumps([p.__dict__ for p in all_scraped])
             assessment_prompt = (
-                f"Context:\n{context}\n\n"
+                f"Context:\n{safe_context}\n\n"
                 f"Scraped Data:\n{scraped_json}\n\n"
                 f"Assess if we have enough verified products (at least 3). "
                 f"Output ONLY strict JSON: {{\"saturated\": bool, \"next_query\": str}}"
             )
 
-            response = self.llm_client(
-                model=self.model_name,
+            response = self._call_llm(
                 prompt=assessment_prompt,
-                system_prompt=self.playbook,
-                options={"keep_alive": "5m"},
-            )
-            
-            self.token_ledger.log_usage(
-                TokenUsage(
-                    agent_name="Scout",
-                    model_name=self.model_name,
-                    prompt_tokens=response.prompt_tokens,
-                    completion_tokens=response.completion_tokens,
-                    total_tokens=response.total_tokens,
-                )
+                context=None # Context is already in the prompt
             )
 
             try:
-                assessment = json.loads(response.content.strip())
+                assessment = json.loads(self._strip_markdown_fences(response.content))
                 if assessment.get("saturated"):
                     break
                 
@@ -154,7 +137,7 @@ class Scout(BaseAgent):
                     break
                     
                 current_query = next_query
-            except json.JSONDecodeError:
+            except (json.JSONDecodeError, TypeError):
                 logger.warning("Failed to parse saturation assessment. Breaking loop.")
                 break
 
@@ -170,38 +153,21 @@ class Scout(BaseAgent):
         # Final formatting and filtering
         scraped_json = json.dumps([p.__dict__ for p in all_scraped])
         final_prompt = (
-            f"Context:\n{context}\n\n"
+            f"Context:\n{safe_context}\n\n"
             f"Accumulated Scraped Data:\n{scraped_json}\n\n"
             f"Filter to ONLY include verified brands. Format remaining into strict JSON array. "
             f"NEVER invent/guess. If nothing survives, output: "
             f"[{{\"product_name\": \"N/A\", \"brand\": \"N/A\", \"price\": 0.0, \"currency\": \"USD\", \"url\": \"N/A\", \"asin\": \"N/A\"}}]"
         )
 
-        final_response = self.llm_client(
-            model=self.model_name,
+        final_response = self._call_llm(
             prompt=final_prompt,
-            system_prompt=self.playbook,
-            options={"keep_alive": "5m"},
-        )
-        
-        self.token_ledger.log_usage(
-            TokenUsage(
-                agent_name="Scout",
-                model_name=self.model_name,
-                prompt_tokens=final_response.prompt_tokens,
-                completion_tokens=final_response.completion_tokens,
-                total_tokens=final_response.total_tokens,
-            )
+            context=None
         )
 
         # Post-validation gate
         try:
-            content = final_response.content.strip()
-            if content.startswith("```json"):
-                content = content[7:-3].strip()
-            elif content.startswith("```"):
-                content = content[3:-3].strip()
-                
+            content = self._strip_markdown_fences(final_response.content)
             final_products = json.loads(content)
         except json.JSONDecodeError:
             logger.error("Final LLM output is not valid JSON.")
@@ -250,27 +216,11 @@ class Scout(BaseAgent):
         self.checkpoint.clear_state(run_id)
 
         return AgentResult(
-            agent_name="Scout",
+            agent_name=self.agent_name,
             artifact=json.dumps(validated_products),
-            token_usage={"total_tokens": 0},  # Logged manually per call
-        )
-
-    def execute(self, task_prompt: str, context: str | None = None) -> "AgentResult":
-        """
-        Executes the agent's primary task using inherited helpers.
-        """
-        from src.agents.base_agent import AgentResult
-        
-        # 1. Call the LLM using the inherited helper (playbook is auto-applied as system prompt)
-        response = self._call_llm(prompt=task_prompt, context=context)
-        
-        # 2. Clean the output using the inherited helper
-        cleaned_content = self._strip_markdown_fences(response.content)
-        
-        # 3. Return the standardized result
-        return AgentResult(
-            artifact=cleaned_content,
-            prompt_tokens=response.prompt_tokens,
-            completion_tokens=response.completion_tokens,
-            total_tokens=response.total_tokens,
+            token_usage={
+                "prompt_tokens": final_response.prompt_tokens,
+                "completion_tokens": final_response.completion_tokens,
+                "total_tokens": final_response.total_tokens,
+            }
         )

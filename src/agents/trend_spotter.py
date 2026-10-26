@@ -3,7 +3,7 @@ Trend Spotter Agent: Identifies high-demand, low-competition market niches.
 """
 from typing import Callable
 
-from src.agents.base_agent import BaseAgent
+from src.agents.base_agent import AgentResult, BaseAgent
 from src.utils.llm_client import OllamaResponse
 from src.utils.token_ledger import TokenLedger
 
@@ -33,12 +33,10 @@ class TrendSpotter(BaseAgent):
             model_name=model_name,
         )
 
-        def execute(self, task_prompt: str, context: str | None = None) -> "AgentResult":
+    def execute(self, task_prompt: str, context: str | None = None) -> AgentResult:
         """
         Executes the agent's primary task using inherited helpers.
         """
-        from src.agents.base_agent import AgentResult
-        
         # 1. Call the LLM using the inherited helper (playbook is auto-applied as system prompt)
         response = self._call_llm(prompt=task_prompt, context=context)
         
@@ -47,8 +45,11 @@ class TrendSpotter(BaseAgent):
         
         # 3. Return the standardized result
         return AgentResult(
+            agent_name=self.agent_name,
             artifact=cleaned_content,
-            prompt_tokens=response.prompt_tokens,
-            completion_tokens=response.completion_tokens,
-            total_tokens=response.total_tokens,
+            token_usage={
+                "prompt_tokens": response.prompt_tokens,
+                "completion_tokens": response.completion_tokens,
+                "total_tokens": response.total_tokens,
+            }
         )
