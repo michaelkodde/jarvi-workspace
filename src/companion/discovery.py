@@ -1,9 +1,5 @@
 # src/companion/discovery.py
-"""AST-only workspace discovery for the Jarvi Companion.
-
-Never imports, instantiates, or executes agent code. Reads source as text,
-parses with :mod:`ast`, and returns a typed :class:`SystemRegistry`.
-"""
+"""AST-only workspace discovery for the Jarvi Companion."""
 from __future__ import annotations
 
 import ast
@@ -43,8 +39,6 @@ class DiscoveryError(Exception):
 
 @dataclass(frozen=True)
 class ParamSpec:
-    """One constructor parameter."""
-
     name: str
     has_default: bool
     default_value: str | None
@@ -52,8 +46,6 @@ class ParamSpec:
 
 @dataclass(frozen=True)
 class PlaybookResolution:
-    """Resolved playbook location and on-disk state."""
-
     path: str | None
     source: str | None
     is_required: bool
@@ -62,8 +54,6 @@ class PlaybookResolution:
 
 @dataclass(frozen=True)
 class AgentContract:
-    """Full contract of a discovered agent class."""
-
     name: str
     module_path: str
     class_type: str
@@ -80,8 +70,6 @@ class AgentContract:
 
 @dataclass(frozen=True)
 class UtilContract:
-    """Public surface of a utility module."""
-
     name: str
     module_path: str
     exports: list[str]
@@ -89,8 +77,6 @@ class UtilContract:
 
 @dataclass(frozen=True)
 class PipelineContract:
-    """Ordered steps and agent references of a pipeline."""
-
     name: str
     steps: list[str]
     agent_refs: list[str]
@@ -98,8 +84,6 @@ class PipelineContract:
 
 @dataclass(frozen=True)
 class ScanError:
-    """A recoverable problem encountered during scanning."""
-
     file: str
     message: str
     severity: str
@@ -107,8 +91,6 @@ class ScanError:
 
 @dataclass(frozen=True)
 class SystemRegistry:
-    """Complete, serializable inventory of the workspace."""
-
     agents: dict[str, AgentContract]
     utils: list[UtilContract]
     pipelines: list[PipelineContract]
@@ -247,16 +229,6 @@ def _hydrate(payload: dict[str, Any]) -> SystemRegistry:
 
 
 class DiscoveryEngine:
-    """Build a typed workspace registry using AST parsing only.
-
-    Args:
-        workspace_path: Root of jarvis-workspace.
-        force: Bypass the cache when True.
-
-    Raises:
-        DiscoveryError: If workspace_path is not a path-like value.
-    """
-
     def __init__(self, workspace_path: str | Path, force: bool = False) -> None:
         if not isinstance(workspace_path, (str, Path)):
             raise DiscoveryError("workspace_path must be a str or Path")
@@ -264,8 +236,12 @@ class DiscoveryEngine:
         self.force = force
         self.cache_path = self.workspace / "brain" / "skills" / "codebase_registry.json"
 
-    def scan(self) -> SystemRegistry:
-        if not self.force:
+    def scan(self, force: bool | None = None) -> SystemRegistry:
+        """Scan the workspace, or return a valid cached registry."""
+        if force is None:
+            force = self.force
+            
+        if not force:
             cached = self._read_cache()
             if cached is not None:
                 logger.info("Discovery cache hit.")
@@ -401,23 +377,8 @@ class DiscoveryEngine:
                     pass
 
     def _is_agent_class(self, node: ast.ClassDef, tree: ast.Module) -> bool:
-        """Determine if a class is an actual agent (not a dataclass/exception/base).
-        
-        An agent is:
-        - A BaseAgent subclass, OR
-        - Has execute() or route() method, OR
-        - Is explicitly named "Router"
-        
-        Excludes:
-        - Classes decorated with @dataclass
-        - Exception classes (inherit from Exception/BaseException)
-        - The BaseAgent class itself
-        """
-        # Exclude BaseAgent itself
         if node.name == "BaseAgent":
             return False
-        
-        # Exclude @dataclass decorated classes
         for decorator in node.decorator_list:
             if isinstance(decorator, ast.Name) and decorator.id == "dataclass":
                 return False
@@ -426,35 +387,21 @@ class DiscoveryEngine:
             if isinstance(decorator, ast.Call):
                 if isinstance(decorator.func, ast.Name) and decorator.func.id == "dataclass":
                     return False
-        
-        # Exclude exception classes
         base_names = [_base_name(base) for base in node.bases]
         exception_bases = {"Exception", "BaseException", "Error", "Warning"}
         if any(base in exception_bases for base in base_names):
             return False
-        
-        # Include if it's a BaseAgent subclass
         if "BaseAgent" in base_names:
             return True
-        
-        # Include if it has execute() or route() method
-        has_execute = any(
-            isinstance(n, ast.FunctionDef) and n.name == "execute" for n in node.body
-        )
-        has_route = any(
-            isinstance(n, ast.FunctionDef) and n.name == "route" for n in node.body
-        )
+        has_execute = any(isinstance(n, ast.FunctionDef) and n.name == "execute" for n in node.body)
+        has_route = any(isinstance(n, ast.FunctionDef) and n.name == "route" for n in node.body)
         if has_execute or has_route:
             return True
-        
-        # Special case: Router
         if node.name == "Router":
             return True
-        
         return False
 
     def _scan_agents(self, errors: list[ScanError]) -> dict[str, AgentContract]:
-        """Discover every agent class under src/agents/."""
         root = self.workspace / "src" / "agents"
         if not root.is_dir():
             errors.append(ScanError("src/agents", "DirectoryMissing", "warning"))
@@ -481,10 +428,8 @@ class DiscoveryEngine:
                 key=lambda n: n.name,
             )
             for node in classes:
-                # Filter: only include actual agents
                 if not self._is_agent_class(node, tree):
                     continue
-                
                 contract = self._contract_for(node, relative, imports_base)
                 contracts[contract.name] = contract
 
@@ -496,19 +441,12 @@ class DiscoveryEngine:
         bases = [_base_name(base) for base in node.bases]
         is_subclass = "BaseAgent" in bases
         init = next(
-            (
-                n for n in node.body
-                if isinstance(n, ast.FunctionDef) and n.name == "__init__"
-            ),
+            (n for n in node.body if isinstance(n, ast.FunctionDef) and n.name == "__init__"),
             None,
         )
         params = _constructor_params(init) if init else []
-        has_execute = any(
-            isinstance(n, ast.FunctionDef) and n.name == "execute" for n in node.body
-        )
-        has_route = any(
-            isinstance(n, ast.FunctionDef) and n.name == "route" for n in node.body
-        )
+        has_execute = any(isinstance(n, ast.FunctionDef) and n.name == "execute" for n in node.body)
+        has_route = any(isinstance(n, ast.FunctionDef) and n.name == "route" for n in node.body)
         forwarded, agent_name = (
             _super_contract(init) if init is not None and is_subclass else (False, None)
         )
@@ -555,9 +493,7 @@ class DiscoveryEngine:
                     logger.warning("Playbook path outside workspace rejected.")
                     path, source = None, None
                 else:
-                    exists = resolved.is_file() and bool(
-                        resolved.read_text(encoding="utf-8").strip()
-                    )
+                    exists = resolved.is_file() and bool(resolved.read_text(encoding="utf-8").strip())
             except (OSError, UnicodeError, RuntimeError):
                 exists = False
 
@@ -604,16 +540,12 @@ class DiscoveryEngine:
                     targets = list(stmt.targets)
                 elif isinstance(stmt, ast.AnnAssign):
                     targets = [stmt.target]
-                if any(
-                    isinstance(t, ast.Name) and t.id == "__all__" for t in targets
-                ):
+                if any(isinstance(t, ast.Name) and t.id == "__all__" for t in targets):
                     value = getattr(stmt, "value", None)
                     if isinstance(value, (ast.List, ast.Tuple)):
                         exports = [
-                            element.value
-                            for element in value.elts
-                            if isinstance(element, ast.Constant)
-                            and isinstance(element.value, str)
+                            element.value for element in value.elts 
+                            if isinstance(element, ast.Constant) and isinstance(element.value, str)
                         ]
                     declared = True
                     break
@@ -621,8 +553,7 @@ class DiscoveryEngine:
             if not declared:
                 exports = sorted(
                     n.name for n in tree.body
-                    if isinstance(n, (ast.ClassDef, ast.FunctionDef))
-                    and not n.name.startswith("_")
+                    if isinstance(n, (ast.ClassDef, ast.FunctionDef)) and not n.name.startswith("_")
                 )
 
             utils.append(UtilContract(path.stem, relative, exports))
@@ -656,13 +587,11 @@ class DiscoveryEngine:
             if not isinstance(raw_steps, list):
                 continue
             steps = [
-                str(step["name"])
-                for step in raw_steps
+                str(step["name"]) for step in raw_steps
                 if isinstance(step, dict) and isinstance(step.get("name"), str)
             ]
             refs = [
-                str(step["agent"])
-                for step in raw_steps
+                str(step["agent"]) for step in raw_steps
                 if isinstance(step, dict) and isinstance(step.get("agent"), str)
             ]
             missing.update(ref for ref in refs if ref and ref not in agents)

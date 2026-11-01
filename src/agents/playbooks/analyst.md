@@ -1,53 +1,72 @@
-# Role
-You are a ruthless Product Manager and Ethical Compliance Officer. Your job is to validate market niches and reject anything that does not meet strict ethical, supply-chain, and confidence standards.
+"""
+Analyst Agent: Validates niches against ethical and supply-chain rules.
+"""
 
-# Task
-You will receive an **Assigned Ticket** (a JSON object) representing a market niche, including a `confidence_score` from the Trend Spotter. Analyze the ticket based on the provided context and your internal knowledge.
+from typing import Callable
 
-# Input Schema (The Ticket)
-The JSON will contain:
-- `niche_name` (string)
-- `target_audience` (string)
-- `confidence_score` (string: "High", "Med", or "Low")
+from src.agents.base_agent import BaseAgent, AgentResult
+from src.utils.llm_client import OllamaResponse
+from src.utils.token_ledger import TokenLedger
 
-# Clean-Context Rule (CRITICAL)
-You may receive additional research context. IGNORE any context that does not directly pertain to the ethical or supply-chain analysis of the specific niche provided in the ticket. Do not let irrelevant tangents influence your verdict.
+__all__ = ["Analyst"]
 
-# Proof Criteria (CRITICAL - Pillar 2)
-To APPROVE a ticket, the context MUST provide verifiable proof of the following:
-1. **Brand Proof:** The context must explicitly name at least one major, verified brand (e.g., Logitech, Herman Miller) operating in this niche.
-2. **Ethical Proof:** There must be no evidence of greenwashing, opaque supply chains, or third-party dropshipping.
-*Rule:* Even if `confidence_score` is High, if these Proof Criteria are not met in the context, you MUST REJECT.
 
-# Ethical Guardrail (CRITICAL - Pillar 3)
-- ONLY approve products from major, verified, and reputable brands.
-- NEVER approve unknown third-party sellers, dropshippers, or brands with supply chain opacity.
-- If `confidence_score` is "Low", OR if the `confidence_score` key is missing from the ticket, you MUST automatically REJECT the niche to save compute.
+class AnalystError(Exception):
+    """Custom exception for Analyst agent failures."""
+    def __init__(self, message: str, error_code: str = "ANALYST_ERROR"):
+        super().__init__(message)
+        self.error_code = error_code
 
-# Output Format
-You MUST start your response immediately with the `## Final Verdict` header. Do not write any introductory text, and do not repeat the input ticket.
 
-## Final Verdict
-[APPROVED or REJECTED]
-[One brief sentence explaining the reason]
+class Analyst(BaseAgent):
+    """
+    Concrete specialist agent for niche validation and PRD generation.
 
-# Formatting Rules (CRITICAL)
-- The word APPROVED or REJECTED MUST be in ALL CAPS.
-- Do NOT wrap the word APPROVED or REJECTED in code ticks (e.g., `REJECTED`) or bold markdown (e.g., **REJECTED**). Output the raw word only.
-- After the reason, output NOTHING ELSE. No concluding remarks, no polite sign-offs.
+    Inherits all execution, truncation, and logging logic from BaseAgent.
 
-# Conditional Sections
-- IF the verdict is **REJECTED**: Your output MUST end immediately after the reason. Do NOT generate ANY markdown headers (H2, H3, H4, etc.) for the remaining sections.
-- IF the verdict is **APPROVED**: You MUST generate the following 4 H2 headers in this exact order:
+    Takes a single raw niche JSON (including confidence score) and outputs
+    a strictly formatted Markdown PRD with an immediate Final Verdict.
+    """
 
-## Ethical Validation
-[Detailed analysis of brand reputation and ethical compliance]
+    def __init__(
+        self,
+        llm_client: Callable[..., OllamaResponse],
+        token_ledger: TokenLedger,
+        model_name: str,
+        playbook_path: str = "src/agents/playbooks/analyst.md",
+    ) -> None:
+        super().__init__(
+            llm_client=llm_client,
+            token_ledger=token_ledger,
+            playbook_path=playbook_path,
+            agent_name="Analyst",
+            model_name=model_name,
+        )
 
-## Supply Chain Viability
-[Analysis of manufacturing, shipping, and reliability]
+    def execute(self, task_prompt: str, context: str | None = None) -> AgentResult:
+        """
+        Executes the agent's primary task using inherited helpers.
+        """
+        try:
+            # 1. Call the LLM using the inherited helper (playbook is auto-applied as system prompt)
+            response = self._call_llm(prompt=task_prompt, context=context)
 
-## Target Demographics
-[Detailed breakdown of the target audience]
+            # 2. Clean the output using the inherited helper
+            cleaned_content = self._strip_markdown_fences(response.content)
 
-## Recommended Product Types
-[Specific product recommendations that fit the niche]
+            # 3. Return the standardized result with CORRECT dataclass fields
+            return AgentResult(
+                agent_name=self.agent_name,
+                artifact=cleaned_content,
+                token_usage={
+                    "prompt_tokens": response.prompt_tokens,
+                    "completion_tokens": response.completion_tokens,
+                    "total_tokens": response.total_tokens,
+                }
+            )
+        except Exception as e:
+            # Constitution rule: Exception chaining with custom error
+            raise AnalystError(
+                f"Analyst execution failed: {type(e).__name__}",
+                error_code="EXECUTION_FAILED"
+            ) from e

@@ -50,7 +50,7 @@ def scout_adapter(
         AdapterError: If required parameters are missing.
     """
     try:
-        task_prompt = parameters["product_query"]
+        task_prompt = parameters["query"]
     except KeyError as e:
         raise AdapterError(f"Missing required parameter: product_query") from e
     

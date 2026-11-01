@@ -1,0 +1,278 @@
+[
+  {
+    "id": "mem_1793059905674_0dadd0af",
+    "timestamp": "2026-10-27T00:11:45.674460Z",
+    "scope": "business",
+    "category": "conversation_history",
+    "content": "I've started working on that. Ticket: 74d729b4a80b47ac888c2a99d7f2cf0e",
+    "tags": [
+      "be00a849ea5e",
+      "assistant"
+    ],
+    "source": "companion"
+  },
+  {
+    "id": "mem_1793059891159_10875b18",
+    "timestamp": "2026-10-27T00:11:31.159730Z",
+    "scope": "business",
+    "category": "conversation_history",
+    "content": "find me non toxic cookware",
+    "tags": [
+      "be00a849ea5e",
+      "user"
+    ],
+    "source": "companion"
+  },
+  {
+    "id": "mem_1793058410024_509bc600",
+    "timestamp": "2026-10-26T23:46:50.024479Z",
+    "scope": "business",
+    "category": "conversation_history",
+    "content": "I've started working on that. Ticket: 3a560ed8f6234d768eb992bf81c692db",
+    "tags": [
+      "be00a849ea5e",
+      "assistant"
+    ],
+    "source": "companion"
+  },
+  {
+    "id": "mem_1793058407422_6473c0fe",
+    "timestamp": "2026-10-26T23:46:47.422916Z",
+    "scope": "business",
+    "category": "conversation_history",
+    "content": "find cookware",
+    "tags": [
+      "be00a849ea5e",
+      "user"
+    ],
+    "source": "companion"
+  },
+  {
+    "id": "mem_1793058328128_526198d7",
+    "timestamp": "2026-10-26T23:45:28.128903Z",
+    "scope": "business",
+    "category": "conversation_history",
+    "content": "I've started working on that. Ticket: a7b8a0ce733246ac85d445f6e1f9cbc7",
+    "tags": [
+      "be00a849ea5e",
+      "assistant"
+    ],
+    "source": "companion"
+  },
+  {
+    "id": "mem_1793058310366_c557e6e5",
+    "timestamp": "2026-10-26T23:45:10.366642Z",
+    "scope": "business",
+    "category": "conversation_history",
+    "content": "search for healthy, non toxic, cookware",
+    "tags": [
+      "be00a849ea5e",
+      "user"
+    ],
+    "source": "companion"
+  },
+  {
+    "id": "mem_1793057224947_be351a58",
+    "timestamp": "2026-10-26T23:27:04.947210Z",
+    "scope": "business",
+    "category": "conversation_history",
+    "content": "I've started working on that. Ticket: c0133f8b76f94cbabd057ea3af35eb39",
+    "tags": [
+      "be00a849ea5e",
+      "assistant"
+    ],
+    "source": "companion"
+  },
+  {
+    "id": "mem_1793057205028_646549e5",
+    "timestamp": "2026-10-26T23:26:45.028364Z",
+    "scope": "business",
+    "category": "conversation_history",
+    "content": "conduct market research looking for chemical free healthy cookware",
+    "tags": [
+      "be00a849ea5e",
+      "user"
+    ],
+    "source": "companion"
+  },
+  {
+    "id": "mem_1793056143081_a98b3d96",
+    "timestamp": "2026-10-26T23:09:03.081346Z",
+    "scope": "business",
+    "category": "conversation_history",
+    "content": "I've started working on that. Ticket: 74d29677d348442796768efb82fe4103",
+    "tags": [
+      "be00a849ea5e",
+      "assistant"
+    ],
+    "source": "companion"
+  },
+  {
+    "id": "mem_1793056138034_79c3cc11",
+    "timestamp": "2026-10-26T23:08:58.034152Z",
+    "scope": "business",
+    "category": "conversation_history",
+    "content": "find me healthy, non chemically coated, cookware.",
+    "tags": [
+      "be00a849ea5e",
+      "user"
+    ],
+    "source": "companion"
+  },
+  {
+    "id": "mem_1793055738909_404689c5",
+    "timestamp": "2026-10-26T23:02:18.909325Z",
+    "scope": "business",
+    "category": "conversation_history",
+    "content": "I've started working on that. Ticket: fcb98ac4cce94704895ab01fcc72d932",
+    "tags": [
+      "be00a849ea5e",
+      "assistant"
+    ],
+    "source": "companion"
+  },
+  {
+    "id": "mem_1793055720145_fe0377f5",
+    "timestamp": "2026-10-26T23:02:00.145912Z",
+    "scope": "business",
+    "category": "conversation_history",
+    "content": "hi",
+    "tags": [
+      "be00a849ea5e",
+      "user"
+    ],
+    "source": "companion"
+  },
+  {
+    "id": "mem_1793052533117_97fa27e8",
+    "timestamp": "2026-10-26T22:08:53.117371Z",
+    "scope": "business",
+    "category": "conversation_history",
+    "content": "conduct market analysis on healthy cookware",
+    "tags": [
+      "be00a849ea5e",
+      "user"
+    ],
+    "source": "companion"
+  },
+  {
+    "id": "mem_1793051542812_521b4dec",
+    "timestamp": "2026-10-26T21:52:22.814598Z",
+    "scope": "business",
+    "category": "conversation_history",
+    "content": "I'm not sure I understand. Could you clarify what you need?",
+    "tags": [
+      "be00a849ea5e",
+      "assistant"
+    ],
+    "source": "companion"
+  },
+  {
+    "id": "mem_1793051539531_5a527bc5",
+    "timestamp": "2026-10-26T21:52:19.531537Z",
+    "scope": "business",
+    "category": "conversation_history",
+    "content": "do market analysis on healthy cookware",
+    "tags": [
+      "be00a849ea5e",
+      "user"
+    ],
+    "source": "companion"
+  },
+  {
+    "id": "mem_1793051522826_f954298d",
+    "timestamp": "2026-10-26T21:52:02.826824Z",
+    "scope": "business",
+    "category": "conversation_history",
+    "content": "I'm not sure I understand. Could you clarify what you need?",
+    "tags": [
+      "be00a849ea5e",
+      "assistant"
+    ],
+    "source": "companion"
+  },
+  {
+    "id": "mem_1793051519773_993c4bce",
+    "timestamp": "2026-10-26T21:51:59.774589Z",
+    "scope": "business",
+    "category": "conversation_history",
+    "content": "hi",
+    "tags": [
+      "be00a849ea5e",
+      "user"
+    ],
+    "source": "companion"
+  },
+  {
+    "id": "mem_1793050720757_5ca5f149",
+    "timestamp": "2026-10-26T21:38:40.757867Z",
+    "scope": "business",
+    "category": "conversation_history",
+    "content": "I'm not sure I understand. Could you clarify what you need?",
+    "tags": [
+      "be00a849ea5e",
+      "assistant"
+    ],
+    "source": "companion"
+  },
+  {
+    "id": "mem_1793050720738_202ab908",
+    "timestamp": "2026-10-26T21:38:40.738472Z",
+    "scope": "business",
+    "category": "conversation_history",
+    "content": "run market analysis on healthy cookware",
+    "tags": [
+      "be00a849ea5e",
+      "user"
+    ],
+    "source": "companion"
+  },
+  {
+    "id": "mem_1793050692714_a60d7459",
+    "timestamp": "2026-10-26T21:38:12.714064Z",
+    "scope": "business",
+    "category": "conversation_history",
+    "content": "I'm not sure I understand. Could you clarify what you need?",
+    "tags": [
+      "be00a849ea5e",
+      "assistant"
+    ],
+    "source": "companion"
+  },
+  {
+    "id": "mem_1793050692163_a8226a32",
+    "timestamp": "2026-10-26T21:38:12.163408Z",
+    "scope": "business",
+    "category": "conversation_history",
+    "content": "hello",
+    "tags": [
+      "be00a849ea5e",
+      "user"
+    ],
+    "source": "companion"
+  },
+  {
+    "id": "mem_1792857015352_d57de908",
+    "timestamp": "2026-10-24T15:50:15.352787Z",
+    "scope": "business",
+    "category": "conversation_history",
+    "content": "I'm not sure I understand. Could you clarify what you need?",
+    "tags": [
+      "be00a849ea5e",
+      "assistant"
+    ],
+    "source": "companion"
+  },
+  {
+    "id": "mem_1792857014819_63e6730e",
+    "timestamp": "2026-10-24T15:50:14.819657Z",
+    "scope": "business",
+    "category": "conversation_history",
+    "content": "hello",
+    "tags": [
+      "be00a849ea5e",
+      "user"
+    ],
+    "source": "companion"
+  }
+]

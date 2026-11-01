@@ -2,8 +2,17 @@
     "workspace_path": "C:\\Users\\Michael\\jarvis-workspace",
     "ollama_url": "http://localhost:11434",
     "models": {
+        "router": "qwen2.5:3b",
+        "agent": "qwen2.5:7b",
         "strategist": "qwen2.5:7b",
         "analyst": "minicpm-v"
     },
-    "search_engine": "https://html.duckduckgo.com/html/?q="
+    "search_engine": "https://html.duckduckgo.com/html/?q=",
+    "daemon": {
+        "enabled": true,
+        "poll_interval_sec": 2.0,
+        "queue_depth_threshold": 50,
+        "max_tickets_per_cycle": 10,
+        "max_ticket_size_bytes": 1048576
+    }
 }

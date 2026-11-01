@@ -183,7 +183,7 @@ def query_ollama(
     actual_timeout = timeout or (CONNECT_TIMEOUT, READ_TIMEOUT)
     
     try:
-        response = _get_session().post(url, json=payload, timeout=120)
+        response = _get_session().post(url, json=payload, timeout=actual_timeout)
         response.raise_for_status()
         
         try:

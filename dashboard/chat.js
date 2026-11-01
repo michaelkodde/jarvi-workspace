@@ -15,8 +15,10 @@ function chatApp() {
         maxReconnectAttempts: 10,
 
         init() {
-            // Generate or restore conversation ID
-            this.conversationId = localStorage.getItem('jarvi_conversation_id') || crypto.randomUUID().replace(/-/g, '').slice(0, 12);
+            // Generate or restore conversation ID (strips hyphens to match backend regex)
+            this.conversationId =
+                localStorage.getItem('jarvi_conversation_id') ||
+                crypto.randomUUID().replace(/-/g, '').slice(0, 12);
             localStorage.setItem('jarvi_conversation_id', this.conversationId);
             this.connectWebSocket();
         },
@@ -80,6 +82,7 @@ function chatApp() {
             switch (data.type) {
                 case 'text_delta':
                     this.addMessage('assistant', data.payload.content || '');
+                    this.isProcessing = false; // <-- ADDED: Unfreeze chat
                     break;
                 case 'status_update':
                     this.addMessage(
@@ -94,6 +97,7 @@ function chatApp() {
                         preview: data.payload.preview || '',
                     };
                     this.addMessage('system', 'Job requires your approval');
+                    this.isProcessing = false; // <-- ADDED: Unfreeze chat for HITL
                     break;
                 case 'completed':
                     this.hitlTicket = null;
@@ -103,7 +107,6 @@ function chatApp() {
                     this.addMessage('assistant', markdown, 'markdown');
                     break;
                 case 'ack':
-                    // Acknowledgment - no UI action needed
                     break;
                 case 'error':
                     this.isProcessing = false;
@@ -111,6 +114,7 @@ function chatApp() {
                     break;
                 default:
                     console.warn('Unknown WebSocket event type:', data.type);
+                    this.isProcessing = false; // <-- SAFETY NET
             }
             this.$nextTick(() => {
                 if (this.$refs.messages) {

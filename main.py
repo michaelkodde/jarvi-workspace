@@ -76,10 +76,12 @@ async def lifespan(app: FastAPI):
         """Background loop that periodically submits code review jobs."""
         logger.info(f"🕒 Background review task STARTED. Interval: {REVIEW_INTERVAL_SECONDS}s")
         try:
+            # 1. ADD THIS: Wait for the full interval BEFORE the very first run
+            logger.info(f"💤 Initial delay: Waiting {REVIEW_INTERVAL_SECONDS} seconds before first run...")
+            await asyncio.sleep(REVIEW_INTERVAL_SECONDS)
+            
+            # 2. Now start the infinite loop
             while True:
-                logger.info(f"💤 Sleeping for {REVIEW_INTERVAL_SECONDS} seconds...")
-                await asyncio.sleep(REVIEW_INTERVAL_SECONDS)
-                
                 logger.info("⏰ Triggering periodic code review...")
                 try:
                     # Access pipeline_flow safely from app state (no globals)
@@ -103,6 +105,10 @@ async def lifespan(app: FastAPI):
                 except Exception as e:
                     # Log full traceback for debugging, but do not crash the background loop
                     logger.error(f"❌ Failed to submit periodic review job: {type(e).__name__}: {str(e)}", exc_info=True)
+                
+                # 3. Sleep before the NEXT iteration
+                logger.info(f"💤 Sleeping for {REVIEW_INTERVAL_SECONDS} seconds until next review...")
+                await asyncio.sleep(REVIEW_INTERVAL_SECONDS)
                     
         except asyncio.CancelledError:
             logger.info("🛑 Background review task gracefully cancelled.")
@@ -192,7 +198,6 @@ def create_app() -> FastAPI:
             pipeline_definitions_path=str(config_path)
         )
 
-        pipeline_flow.start_worker()
 
         # Assign to global reference so the lifespan background task can access it
         _pipeline_flow_ref = pipeline_flow
