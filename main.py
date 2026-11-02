@@ -5,6 +5,7 @@ Entry point for running the Jarvi Chat Server with real dependencies.
 import asyncio
 import logging
 import os
+import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -35,6 +36,8 @@ logger = logging.getLogger(__name__)
 
 from src.companion.memory import MemoryEngine
 from src.companion.query_api import QueryAPI
+from src.companion.context_injector import ContextInjector
+from src.daemon.daemon_loop import DaemonLoop
 from src.services.pipeline_flow import PipelineFlow
 from src.agents.router import Router
 from src.agents.analyst import Analyst
@@ -42,7 +45,7 @@ from src.agents.creator import Creator
 from src.agents.publisher import Publisher
 from src.agents.scout import Scout
 from src.agents.trend_spotter import TrendSpotter
-from src.agents.coder import Coder  # <-- NEW: Import Coder Agent
+from src.agents.coder import Coder
 
 from src.utils.llm_client import query_ollama, OllamaResponse
 from src.utils.token_ledger import TokenLedger
@@ -62,74 +65,47 @@ WORKSPACE = Path(__file__).parent.resolve()
 # ============================================================================
 # 2.5. BACKGROUND TASKS (LIFESPAN)
 # ============================================================================
-REVIEW_INTERVAL_SECONDS = 86400  
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     Manage background tasks for the Jarvi application.
-    Ensures graceful startup and shutdown of asynchronous maintenance loops.
+    Wakes up the Daemon Loop (Jarvi's brain) and serves the Chat UI.
     """
-    logger.info("🔄 Starting background maintenance tasks...")
+    logger.info("🔄 Starting Jarvi (Daemon + Chat Server)...")
     
-    async def periodic_code_review():
-        """Background loop that periodically submits code review jobs."""
-        logger.info(f"🕒 Background review task STARTED. Interval: {REVIEW_INTERVAL_SECONDS}s")
-        try:
-            # 1. ADD THIS: Wait for the full interval BEFORE the very first run
-            logger.info(f"💤 Initial delay: Waiting {REVIEW_INTERVAL_SECONDS} seconds before first run...")
-            await asyncio.sleep(REVIEW_INTERVAL_SECONDS)
-            
-            # 2. Now start the infinite loop
-            while True:
-                logger.info("⏰ Triggering periodic code review...")
-                try:
-                    # Access pipeline_flow safely from app state (no globals)
-                    pf = getattr(app.state, "pipeline_flow", None)
-                    
-                    if pf is not None:
-                        logger.info("📝 Submitting job to PipelineFlow...")
-                        pf.submit_job(
-                            job_type="code_review_pipeline",
-                            parameters={
-                                "target_files": "src/agents/analyst.py,src/agents/base_agent.py,src/companion/chat_server.py",
-                                "focus": "Check for exception chaining, token ledger usage, and BaseAgent contract compliance."
-                            },
-                            priority=1,
-                            description="Automated daily codebase health check"
-                        )
-                        logger.info("✅ Code review job submitted to queue.")
-                    else:
-                        logger.error("❌ pipeline_flow not found in app.state. Cannot submit job.")
-                        
-                except Exception as e:
-                    # Log full traceback for debugging, but do not crash the background loop
-                    logger.error(f"❌ Failed to submit periodic review job: {type(e).__name__}: {str(e)}", exc_info=True)
-                
-                # 3. Sleep before the NEXT iteration
-                logger.info(f"💤 Sleeping for {REVIEW_INTERVAL_SECONDS} seconds until next review...")
-                await asyncio.sleep(REVIEW_INTERVAL_SECONDS)
-                    
-        except asyncio.CancelledError:
-            logger.info("🛑 Background review task gracefully cancelled.")
-        except Exception as e:
-            # Catch-all for unexpected loop crashes
-            logger.error(f"💥 Background review task crashed: {type(e).__name__}: {str(e)}", exc_info=True)
-
-    # Start the background task
-    logger.info("🚀 Creating asyncio task for periodic review...")
-    review_task = asyncio.create_task(periodic_code_review())
+    # Initialize Context Injector
+    context_injector = ContextInjector(
+        memory_engine=app.state.memory_engine,
+        max_context_memories=3,
+        max_context_chars=2000,
+    )
+    logger.info("✅ ContextInjector initialized.")
     
-    yield  # Application runs here
+    # Initialize the Daemon Loop
+    daemon = DaemonLoop(
+        workspace_path=WORKSPACE,
+        pipeline_flow=app.state.pipeline_flow,
+        poll_interval_sec=2.0,
+        queue_depth_threshold=50,
+        enabled=True,
+        context_injector=context_injector,
+    )
     
-    # Shutdown: Gracefully cancel and await the task
-    logger.info("🛑 Cancelling periodic review task...")
-    review_task.cancel()
-    try:
-        await review_task
-    except asyncio.CancelledError:
-        pass  # Expected behavior during shutdown
-    logger.info("🛑 Stopped periodic code review task.")
+    # Run the blocking Daemon Loop in a background thread
+    daemon_thread = threading.Thread(target=daemon.start, daemon=True, name="Jarvi-Daemon")
+    daemon_thread.start()
+    
+    # Save reference for graceful shutdown
+    app.state.daemon = daemon
+    logger.info("🌟 Jarvi is awake and running in the background.")
+    
+    yield  # <-- FastAPI runs here, serving the chat UI
+    
+    # Graceful Shutdown
+    logger.info("🛑 Shutting down Jarvi...")
+    daemon.stop(timeout_sec=5.0)
+    daemon_thread.join(timeout=5.0)
+    logger.info("✅ Jarvi has gone to sleep.")
 
 
 # ============================================================================
@@ -137,7 +113,6 @@ async def lifespan(app: FastAPI):
 # ============================================================================
 def create_app() -> FastAPI:
     """Factory function to create and configure the ChatServer FastAPI app."""
-    global _pipeline_flow_ref
     logger.info("🚀 Initializing Jarvi Real Components...")
 
     try:
@@ -182,7 +157,6 @@ def create_app() -> FastAPI:
             "creator": Creator(llm_client=agent_client, token_ledger=token_ledger, model_name=CONFIG["agent_model"], playbook_path=str(playbook_dir / "creator.md")),
             "publisher": Publisher(llm_client=agent_client, token_ledger=token_ledger, model_name=CONFIG["agent_model"], playbook_path=str(playbook_dir / "publisher.md")),
             "trend_spotter": TrendSpotter(llm_client=agent_client, token_ledger=token_ledger, model_name=CONFIG["agent_model"], playbook_path=str(playbook_dir / "trend_spotter.md")),
-            # --- NEW: Coder Agent ---
             "coder": Coder(
                 llm_client=agent_client,
                 token_ledger=token_ledger,
@@ -198,10 +172,9 @@ def create_app() -> FastAPI:
             pipeline_definitions_path=str(config_path)
         )
 
-
-        # Assign to global reference so the lifespan background task can access it
-        _pipeline_flow_ref = pipeline_flow
-        logger.info("✅ PipelineFlow initialized.")
+        # NOTE: We do NOT call pipeline_flow.start_worker() here.
+        # The DaemonLoop is now the sole executor to prevent race conditions.
+        logger.info("✅ PipelineFlow initialized (DaemonLoop will drive execution).")
 
         # 4. Query API (HITL & Status)
         query_api = QueryAPI(pipeline_flow=pipeline_flow)
@@ -218,6 +191,7 @@ def create_app() -> FastAPI:
             lifespan=lifespan,
         )
         chat_server.app.state.pipeline_flow = pipeline_flow
+        chat_server.app.state.memory_engine = memory_engine  # Needed for ContextInjector in lifespan
 
         if AUTH_TOKEN:
             logger.info("🔒 Auth token detected. WebSocket connections will require authentication.")

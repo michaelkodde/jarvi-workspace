@@ -41,6 +41,7 @@ class DaemonLoop:
         enabled: bool = True,
         resource_watchdog: Optional[Any] = None,
         notification_callback: Optional[Any] = None,
+        context_injector: Optional[Any] = None,  # NEW: Memory enrichment
     ):
         if not (0.5 <= poll_interval_sec <= 10.0):
             raise DaemonError("poll_interval_sec must be between 0.5 and 10.0")
@@ -57,6 +58,7 @@ class DaemonLoop:
         self.enabled = enabled
         self.resource_watchdog = resource_watchdog
         self.notification_callback = notification_callback
+        self.context_injector = context_injector  # NEW
 
         # Paths
         self.inbox_path = self.workspace_path / "00_inbox"
@@ -200,13 +202,27 @@ class DaemonLoop:
                 self._reject_ticket(file_path, ErrorCode.INVALID_TICKET, "Parameters contain forbidden patterns (e.g., path traversal)", ticket_id)
                 return
 
-            # 7. Submit to PipelineFlow
+            # 7. Submit to PipelineFlow (with optional context enrichment)
             try:
+                # Enrich parameters with context (if injector is available)
+                final_parameters = ticket.parameters
+                if self.context_injector is not None:
+                    try:
+                        context_result = self.context_injector.inject_context(ticket.job_type, ticket.parameters)
+                        if context_result.status == "success" and context_result.enriched_parameters:
+                            final_parameters = context_result.enriched_parameters
+                            logger.debug("Context injected for %s (%d memories used)", 
+                                        ticket.ticket_id, context_result.memories_used)
+                    except Exception as e:
+                        # Graceful degradation: log warning, proceed with original parameters
+                        logger.warning("Context injection failed for %s: %s. Proceeding without context.", 
+                                      ticket.ticket_id, type(e).__name__)
+                
                 trace_desc = ticket.description or f"Inbox ticket: {ticket.ticket_id}"
                 
                 self.pipeline_flow.submit_job(
                     job_type=ticket.job_type,
-                    parameters=ticket.parameters,
+                    parameters=final_parameters,
                     priority=ticket.priority,
                     description=trace_desc,
                 )
