@@ -1,214 +1,206 @@
 # main.py
 """
-Entry point for running the Jarvi Chat Server with real dependencies.
+Gold Standard Entry Point.
+Uses Dependency Injection and Factory patterns to decouple component initialization.
+Strictly manages the Daemon lifecycle to prevent double-execution.
 """
-import asyncio
 import logging
 import os
 import threading
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Dict
 
 from fastapi import FastAPI
-from src.companion.chat_server import ChatServer
 
-# ============================================================================
-# 1. CONFIGURATION & SECURITY
-# ============================================================================
-AUTH_TOKEN = os.getenv("JARVI_AUTH_TOKEN", None)
-
-CONFIG = {
-    "router_model": os.getenv("JARVI_ROUTER_MODEL", "qwen2.5:3b"),
-    "agent_model": os.getenv("JARVI_AGENT_MODEL", "qwen2.5:7b"),
-    "playbook_path": "src/agents/playbooks/router.md", 
-    "pipeline_config": "config/pipelines.json",                  
-    "memory_scope": "business",
-}
-
-# ============================================================================
-# 2. IMPORTS & LOGGING
-# ============================================================================
-logging.basicConfig(
-    level=logging.INFO, 
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-from src.companion.memory import MemoryEngine
-from src.companion.query_api import QueryAPI
-from src.companion.context_injector import ContextInjector
-from src.daemon.daemon_loop import DaemonLoop
-from src.services.pipeline_flow import PipelineFlow
-from src.agents.router import Router
-from src.agents.analyst import Analyst
-from src.agents.creator import Creator
-from src.agents.publisher import Publisher
-from src.agents.scout import Scout
-from src.agents.trend_spotter import TrendSpotter
-from src.agents.coder import Coder
+# ============================================================================
+# 1. CONFIGURATION
+# ============================================================================
+@dataclass(frozen=True)
+class AppConfig:
+    auth_token: str = os.getenv("JARVI_AUTH_TOKEN", "")
+    router_model: str = os.getenv("JARVI_ROUTER_MODEL", "qwen2.5:3b")
+    agent_model: str = os.getenv("JARVI_AGENT_MODEL", "qwen2.5:7b")
+    playbook_path: str = "src/agents/playbooks/router.md"
+    pipeline_config: str = "config/pipelines.json"
+    memory_scope: str = "business"
+    workspace: Path = Path(__file__).parent.resolve()
 
-from src.utils.llm_client import query_ollama, OllamaResponse
-from src.utils.token_ledger import TokenLedger
-
-# --- Adapter Class ---
-class OllamaClient:
-    """Wrapper to bind the model name to the functional query_ollama."""
-    def __init__(self, model_name: str):
-        self.model_name = model_name
-        
-    def __call__(self, prompt: str, system_prompt: str = None, **kwargs) -> OllamaResponse:
-        kwargs.pop('model', None)
-        return query_ollama(model=self.model_name, prompt=prompt, system_prompt=system_prompt, **kwargs)
-
-WORKSPACE = Path(__file__).parent.resolve()
+CONFIG = AppConfig()
 
 # ============================================================================
-# 2.5. BACKGROUND TASKS (LIFESPAN)
+# 2. DEPENDENCY INJECTION CONTAINER
 # ============================================================================
-@asynccontextmanager
-async def lifespan(app: FastAPI):
+@dataclass
+class JarviContainer:
+    """Holds all initialized core components."""
+    memory_engine: Any
+    context_injector: Any
+    router: Any
+    pipeline_flow: Any
+    query_api: Any
+    ollama_client: Any
+    self_corrector: Any
+
+def _build_agents(config: AppConfig, ollama_client: Any, token_ledger: Any) -> Dict[str, Any]:
     """
-    Manage background tasks for the Jarvi application.
-    Wakes up the Daemon Loop (Jarvi's brain) and serves the Chat UI.
+    Factory pattern for agents. 
+    Uses AgentClientAdapter to bridge the new Gold Standard client with legacy BaseAgent.
     """
-    logger.info("🔄 Starting Jarvi (Daemon + Chat Server)...")
+    from src.agents.registry import AGENT_REGISTRY
+    from src.utils.llm_client import AgentClientAdapter
+
+    playbook_dir = config.workspace / "src" / "agents" / "playbooks"
+    agents = {}
     
-    # Initialize Context Injector
+    for name, agent_class in AGENT_REGISTRY.items():
+        # Bind the model name to the client for this specific agent
+        bound_client = AgentClientAdapter(ollama_client, config.agent_model)
+        
+        agents[name] = agent_class(
+            llm_client=bound_client,
+            token_ledger=token_ledger,
+            model_name=config.agent_model,
+            playbook_path=str(playbook_dir / f"{name}.md")
+        )
+    return agents
+
+def initialize_brain(config: AppConfig) -> JarviContainer:
+    """Pure function to initialize the core 'Brain' components."""
+    from src.companion.context_injector import ContextInjector
+    from src.companion.memory import MemoryEngine
+    from src.companion.query_api import QueryAPI
+    from src.services.pipeline_flow import PipelineFlow
+    from src.services.self_corrector import SelfCorrector
+    from src.agents.router import Router
+    from src.utils.llm_client import get_sync_ollama_client
+    from src.utils.token_ledger import TokenLedger
+
+    logger.info("🧠 Initializing Jarvi Brain Components...")
+
+    memory_engine = MemoryEngine(workspace_path=config.workspace, scope=config.memory_scope)
+    ollama_client = get_sync_ollama_client()
+    token_ledger = TokenLedger()
+    
+    playbook_path = config.workspace / config.playbook_path
+    pipeline_config_path = config.workspace / config.pipeline_config
+    
+    if not playbook_path.exists() or not pipeline_config_path.exists():
+        raise FileNotFoundError("Critical playbook or pipeline config missing.")
+
+    router = Router(
+        ollama_model=config.router_model,
+        playbook_path=str(playbook_path),
+        pipeline_config_path=str(pipeline_config_path),
+    )
+
+    agents = _build_agents(config, ollama_client, token_ledger)
+
+    # Initialize Self Corrector (Module 3)
+    self_corrector = SelfCorrector(
+        llm_client=ollama_client,
+        model_name=config.agent_model,
+    )
+
+    # GOLD STANDARD: Pass self_corrector directly to PipelineFlow
+    # PipelineFlow owns execution and error recovery.
+    pipeline_flow = PipelineFlow(
+        agents=agents,
+        pipeline_definitions_path=str(pipeline_config_path),
+        self_corrector=self_corrector,
+    )
+
+    query_api = QueryAPI(pipeline_flow=pipeline_flow)
+    
     context_injector = ContextInjector(
-        memory_engine=app.state.memory_engine,
+        memory_engine=memory_engine,
         max_context_memories=3,
         max_context_chars=2000,
     )
-    logger.info("✅ ContextInjector initialized.")
+
+    logger.info("✅ Brain initialization complete.")
+    return JarviContainer(
+        memory_engine=memory_engine,
+        context_injector=context_injector,
+        router=router,
+        pipeline_flow=pipeline_flow,
+        query_api=query_api,
+        ollama_client=ollama_client,
+        self_corrector=self_corrector,
+    )
+
+# ============================================================================
+# 3. LIFESPAN & APP FACTORY
+# ============================================================================
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manages the lifecycle of the background Daemon."""
+    logger.info("🔄 Starting Jarvi Background Services...")
+    container: JarviContainer = app.state.container
     
-    # Initialize the Daemon Loop
+    from src.daemon.daemon_loop import DaemonLoop
+    
+    # DaemonLoop receives context_injector, but NOT self_corrector.
+    # Self-correction is handled internally by PipelineFlow during execution.
     daemon = DaemonLoop(
-        workspace_path=WORKSPACE,
-        pipeline_flow=app.state.pipeline_flow,
+        workspace_path=CONFIG.workspace,
+        pipeline_flow=container.pipeline_flow,
         poll_interval_sec=2.0,
         queue_depth_threshold=50,
         enabled=True,
-        context_injector=context_injector,
+        context_injector=container.context_injector,
     )
     
-    # Run the blocking Daemon Loop in a background thread
     daemon_thread = threading.Thread(target=daemon.start, daemon=True, name="Jarvi-Daemon")
     daemon_thread.start()
-    
-    # Save reference for graceful shutdown
     app.state.daemon = daemon
     logger.info("🌟 Jarvi is awake and running in the background.")
     
-    yield  # <-- FastAPI runs here, serving the chat UI
+    yield
     
-    # Graceful Shutdown
     logger.info("🛑 Shutting down Jarvi...")
     daemon.stop(timeout_sec=5.0)
     daemon_thread.join(timeout=5.0)
     logger.info("✅ Jarvi has gone to sleep.")
 
-
-# ============================================================================
-# 3. APP FACTORY
-# ============================================================================
 def create_app() -> FastAPI:
-    """Factory function to create and configure the ChatServer FastAPI app."""
-    logger.info("🚀 Initializing Jarvi Real Components...")
-
+    """Factory function. Wires the Container into the FastAPI app."""
+    from src.companion.chat_server import ChatServer
+    
     try:
-        # 1. Memory Engine (Persistence & Context)
-        memory_engine = MemoryEngine(
-            workspace_path=WORKSPACE, 
-            scope=CONFIG["memory_scope"]
-        )
-        logger.info(f"✅ MemoryEngine initialized (scope: {CONFIG['memory_scope']}).")
-
-        # 2. Router (Intent Classification)
-        playbook_path = WORKSPACE / CONFIG["playbook_path"]
-        pipeline_config_path = WORKSPACE / CONFIG["pipeline_config"]
-
-        if not playbook_path.exists():
-            raise FileNotFoundError(f"Router playbook not found at {playbook_path}")
+        container = initialize_brain(CONFIG)
         
-        router = Router(
-            ollama_model=CONFIG["router_model"],
-            playbook_path=str(playbook_path),
-            pipeline_config_path=str(pipeline_config_path),
-        )
-        logger.info(f"✅ Router initialized (Model: {CONFIG['router_model']}).")
-
-        # 3. Pipeline Flow (Agent Execution)
-        config_path = WORKSPACE / CONFIG["pipeline_config"]
-        if not config_path.exists():
-            raise FileNotFoundError(f"Pipeline config not found at {config_path}")
-            
-        # Initialize shared dependencies
-        token_ledger = TokenLedger()
-        
-        # Create ONE client instance bound to the agent model
-        agent_client = OllamaClient(CONFIG["agent_model"])
-        
-        playbook_dir = WORKSPACE / "src" / "agents" / "playbooks"
-        
-        # Wire the bound client and ledger into each agent
-        agents = {
-            "scout": Scout(llm_client=agent_client, token_ledger=token_ledger, model_name=CONFIG["agent_model"], playbook_path=str(playbook_dir / "scout.md")),
-            "analyst": Analyst(llm_client=agent_client, token_ledger=token_ledger, model_name=CONFIG["agent_model"], playbook_path=str(playbook_dir / "analyst.md")),
-            "creator": Creator(llm_client=agent_client, token_ledger=token_ledger, model_name=CONFIG["agent_model"], playbook_path=str(playbook_dir / "creator.md")),
-            "publisher": Publisher(llm_client=agent_client, token_ledger=token_ledger, model_name=CONFIG["agent_model"], playbook_path=str(playbook_dir / "publisher.md")),
-            "trend_spotter": TrendSpotter(llm_client=agent_client, token_ledger=token_ledger, model_name=CONFIG["agent_model"], playbook_path=str(playbook_dir / "trend_spotter.md")),
-            "coder": Coder(
-                llm_client=agent_client,
-                token_ledger=token_ledger,
-                model_name=CONFIG["agent_model"],
-                playbook_path=str(playbook_dir / "coder.md")
-            ),
-        }
-        logger.info(f"✅ Initialized {len(agents)} agents (Model: {CONFIG['agent_model']}).")
-
-        # Wire agents and config into PipelineFlow
-        pipeline_flow = PipelineFlow(
-            agents=agents,
-            pipeline_definitions_path=str(config_path)
-        )
-
-        # NOTE: We do NOT call pipeline_flow.start_worker() here.
-        # The DaemonLoop is now the sole executor to prevent race conditions.
-        logger.info("✅ PipelineFlow initialized (DaemonLoop will drive execution).")
-
-        # 4. Query API (HITL & Status)
-        query_api = QueryAPI(pipeline_flow=pipeline_flow)
-        logger.info("✅ QueryAPI initialized.")
-
-        # --- Wire into Chat Server ---
+        # Initialize the chat server WITHOUT passing lifespan to it.
+        # We manage the lifecycle entirely in the main app factory to prevent double-execution.
         chat_server = ChatServer(
-            workspace_path=WORKSPACE,
-            pipeline_flow=pipeline_flow,
-            query_api=query_api,
-            router=router,
-            memory_engine=memory_engine,
-            auth_token=AUTH_TOKEN,
-            lifespan=lifespan,
+            workspace_path=CONFIG.workspace,
+            pipeline_flow=container.pipeline_flow,
+            query_api=container.query_api,
+            router=container.router,
+            memory_engine=container.memory_engine,
+            auth_token=CONFIG.auth_token,
+            lifespan=None, 
         )
-        chat_server.app.state.pipeline_flow = pipeline_flow
-        chat_server.app.state.memory_engine = memory_engine  # Needed for ContextInjector in lifespan
-
-        if AUTH_TOKEN:
-            logger.info("🔒 Auth token detected. WebSocket connections will require authentication.")
-        else:
-            logger.warning("⚠️ No JARVI_AUTH_TOKEN set. Server is open to local network only.")
-
-        logger.info("🎉 Jarvi Chat Server fully wired and ready.")
-        return chat_server.app
-
+        
+        # Create our main app with the single source of truth for lifespan
+        app = FastAPI(lifespan=lifespan)
+        app.state.container = container
+        app.state.pipeline_flow = container.pipeline_flow
+        app.state.memory_engine = container.memory_engine
+        
+        # Merge routes from chat_server into our main app
+        app.include_router(chat_server.app.router)
+        
+        return app
     except Exception as e:
         logger.critical(f"Failed to initialize Jarvi: {e}")
         raise
 
-
-# Expose the FastAPI app for uvicorn at the module level
 app = create_app()
-
 
 if __name__ == "__main__":
     import uvicorn
