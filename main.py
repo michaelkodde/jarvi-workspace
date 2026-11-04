@@ -10,7 +10,7 @@ import threading
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from fastapi import FastAPI
 
@@ -46,10 +46,17 @@ class JarviContainer:
     ollama_client: Any
     self_corrector: Any
 
-def _build_agents(config: AppConfig, ollama_client: Any, token_ledger: Any) -> Dict[str, Any]:
+def _build_agents(
+    config: AppConfig, 
+    ollama_client: Any, 
+    token_ledger: Any,
+    stealth_engine: Optional[Any] = None,
+    health_monitor: Optional[Any] = None,
+) -> Dict[str, Any]:
     """
     Factory pattern for agents. 
     Uses AgentClientAdapter to bridge the new Gold Standard client with legacy BaseAgent.
+    Conditionally instantiates ScoutMVI if MVI infrastructure is available.
     """
     from src.agents.registry import AGENT_REGISTRY
     from src.utils.llm_client import AgentClientAdapter
@@ -58,15 +65,32 @@ def _build_agents(config: AppConfig, ollama_client: Any, token_ledger: Any) -> D
     agents = {}
     
     for name, agent_class in AGENT_REGISTRY.items():
-        # Bind the model name to the client for this specific agent
         bound_client = AgentClientAdapter(ollama_client, config.agent_model)
         
-        agents[name] = agent_class(
-            llm_client=bound_client,
-            token_ledger=token_ledger,
-            model_name=config.agent_model,
-            playbook_path=str(playbook_dir / f"{name}.md")
-        )
+        # Special handling for ScoutMVI
+        if name == "scout":
+            if stealth_engine is not None and health_monitor is not None:
+                from src.agents.scout_mvi import ScoutMVI
+                agents[name] = ScoutMVI(
+                    agent_name=name,
+                    llm_client=bound_client,
+                    stealth_engine=stealth_engine,
+                    health_monitor=health_monitor,
+                    token_ledger=token_ledger,
+                    model_name=config.agent_model,
+                    playbook_path=str(playbook_dir / f"{name}.md")
+                )
+                logger.info("✅ ScoutMVI agent initialized with MVI infrastructure")
+            else:
+                logger.warning("⚠️ ScoutMVI agent disabled: MVI infrastructure failed to initialize.")
+        else:
+            agents[name] = agent_class(
+                llm_client=bound_client,
+                token_ledger=token_ledger,
+                model_name=config.agent_model,
+                playbook_path=str(playbook_dir / f"{name}.md")
+            )
+            
     return agents
 
 def initialize_brain(config: AppConfig) -> JarviContainer:
@@ -77,7 +101,7 @@ def initialize_brain(config: AppConfig) -> JarviContainer:
     from src.services.pipeline_flow import PipelineFlow
     from src.services.self_corrector import SelfCorrector
     from src.agents.router import Router
-    from src.utils.llm_client import get_sync_ollama_client
+    from src.utils.llm_client import get_sync_ollama_client, CircuitBreaker
     from src.utils.token_ledger import TokenLedger
 
     logger.info("🧠 Initializing Jarvi Brain Components...")
@@ -98,7 +122,34 @@ def initialize_brain(config: AppConfig) -> JarviContainer:
         pipeline_config_path=str(pipeline_config_path),
     )
 
-    agents = _build_agents(config, ollama_client, token_ledger)
+    # Initialize MVI infrastructure with graceful degradation
+    stealth_engine = None
+    health_monitor = None
+    
+    try:
+        from src.services.extractor import Extractor
+        from src.services.health_monitor import HealthMonitor
+        from src.services.stealth_engine import StealthEngine
+        
+        extractor = Extractor()
+        circuit_breaker = CircuitBreaker()
+        stealth_engine = StealthEngine(
+            memory_engine=memory_engine,
+            circuit_breaker=circuit_breaker,
+            extraction_strategy=extractor,
+        )
+        health_monitor = HealthMonitor(memory_engine=memory_engine)
+        logger.info("✅ MVI infrastructure initialized (Stealth Engine, Extractor, Health Monitor)")
+    except Exception as e:
+        logger.critical("Failed to initialize MVI infrastructure: %s. Scout agent will be disabled.", e)
+
+    agents = _build_agents(
+        config=config,
+        ollama_client=ollama_client,
+        token_ledger=token_ledger,
+        stealth_engine=stealth_engine,
+        health_monitor=health_monitor,
+    )
 
     # Initialize Self Corrector (Module 3)
     self_corrector = SelfCorrector(
@@ -202,7 +253,27 @@ def create_app() -> FastAPI:
 
 app = create_app()
 
+
 if __name__ == "__main__":
     import uvicorn
+    import subprocess
+    import sys
+    from pathlib import Path
+    
     logger.info("🌐 Starting Uvicorn on http://127.0.0.1:8000")
+    
+    # Launch the GUI chat window as a detached subprocess
+    gui_script = Path(__file__).parent / "jarvi_app.py"
+    if gui_script.exists():
+        logger.info("🖥️ Launching Jarvi Companion GUI...")
+        subprocess.Popen(
+            [sys.executable, str(gui_script)],
+            cwd=str(Path(__file__).parent),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+        )
+    else:
+        logger.warning("⚠️ jarvi_app.py not found. Running daemon only.")
+    
     uvicorn.run(app, host="127.0.0.1", port=8000, reload=False)
